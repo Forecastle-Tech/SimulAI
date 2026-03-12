@@ -1,0 +1,10 @@
+world:
+  width: 8
+  height: 8
+simulites:
+  - name: "Zizi"
+    x: 1
+    y: 1
+  - name: "Karo"
+    x: 6
+    y: 6
