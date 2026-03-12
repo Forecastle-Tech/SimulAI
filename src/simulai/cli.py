@@ -25,6 +25,9 @@ def run_demo(steps: int, size: int):
     world.add_agent(Simulite(name="Zizi", x=1, y=1))
     world.add_agent(Simulite(name="Karo", x=size - 2, y=size - 2))
 
+    # sprinkle initial food
+    world.sprinkle_food(count=max(3, size // 2))
+
     renderer = TextRenderer()
     for _ in range(steps):
         world.step()
