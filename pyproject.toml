@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "simulai"
 version = "0.0.1"
-description = "SimulAI — Where Your Digital Creatures Develop Attitude."
+description = "SimulAI - Where Your Digital Creatures Develop Attitude."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
-authors = [{name = "Your Name"}]
+license = { text = "MIT" }
+authors = [{ name = "Robert R Annan" }]
 keywords = ["simulation", "ai", "agents", "emergence", "game", "fun"]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -18,37 +18,44 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Life"
 ]
 
-# core runtime deps (keep minimal for now)
+# Keep runtime deps empty for now (lightweight core).
 dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/YOUR_USERNAME/SimulAI"
 Issues = "https://github.com/YOUR_USERNAME/SimulAI/issues"
 
+# Expose CLI: `simulai`
 [project.scripts]
-# installs a console command: `simulai`
 simulai = "simulai.cli:main"
 
-# src/ layout configuration
+# --- setuptools (src-layout) ---
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["simulai*"]
+include = ["simulai", "simulai.*"]
 
+# Include YAML data files shipped with the package (if any)
 [tool.setuptools.package-data]
 simulai = ["data/**/*.yaml"]
 
-# Dev tooling (optional)
+# --- Optional dev dependencies ---
 [project.optional-dependencies]
-dev = ["pytest>=7.4", "ruff>=0.4"]
+dev = [
+  "pytest>=7.4",
+  "ruff>=0.4"
+]
 
+# --- pytest config (pyproject-native) ---
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+# --- Ruff linter config (optional but useful) ---
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q"
+select = ["E", "F", "I"]  # pycodestyle, pyflakes, isort
 ``
