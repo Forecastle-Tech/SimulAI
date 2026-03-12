@@ -13,6 +13,10 @@ Built to be fun, hackable, and easy to extend.
 - Text-mode ASCII renderer
 - CLI: `simulai demo`
 
+- **Food resources** (F on the grid) restore energy when eaten
+- **Traits** (curiosity, sociability) affect wandering & interactions
+- **Simple social interactions** when Simulites meet
+
 ## 🚀 Run locally
 ```bash
 # clone and install
