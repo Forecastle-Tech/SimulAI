@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simulai"
+version = "0.0.1"
+description = "SimulAI — Where Your Digital Creatures Develop Attitude."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Your Name"}]
+keywords = ["simulation", "ai", "agents", "emergence", "game", "fun"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Games/Entertainment :: Simulation",
+  "Topic :: Scientific/Engineering :: Artificial Life"
+]
+
+# core runtime deps (keep minimal for now)
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/YOUR_USERNAME/SimulAI"
+Issues = "https://github.com/YOUR_USERNAME/SimulAI/issues"
+
+[project.scripts]
+# installs a console command: `simulai`
+simulai = "simulai.cli:main"
+
+# src/ layout configuration
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["simulai*"]
+
+[tool.setuptools.package-data]
+simulai = ["data/**/*.yaml"]
+
+# Dev tooling (optional)
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "ruff>=0.4"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+``
