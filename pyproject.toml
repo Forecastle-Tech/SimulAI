@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "simulai"
+name = "simulAI"
 version = "0.0.1"
 description = "SimulAI - Where Your Digital Creatures Develop Attitude."
 readme = "README.md"
