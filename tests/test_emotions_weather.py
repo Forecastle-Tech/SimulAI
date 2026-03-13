@@ -20,5 +20,4 @@ def test_weather_cycles():
     for _ in range(w.weather.duration + 1):
         w.step()
     after = w.weather.kind
-    # It might randomly be the same, but over a few cycles it should change.
     assert isinstance(after, str)
