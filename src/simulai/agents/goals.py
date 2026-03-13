@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 class GoalStatus(Enum):
     PENDING = auto()
@@ -31,6 +31,7 @@ class Goal:
         return self.status in (GoalStatus.SUCCESS, GoalStatus.FAILED)
 
 # -----------------------------------------------------------------------------
+# Existing goals
 
 @dataclass
 class VisitRememberedFood(Goal):
@@ -52,7 +53,7 @@ class VisitRememberedFood(Goal):
             self.reason = "No remembered food."
             return False
 
-        # If we already reached the target, we're successful (eating is handled by Simulite logic)
+        # Success if we reached the target tile (eating is handled by Simulite/global logic)
         if (s.x, s.y) == self.target:
             self.status = GoalStatus.SUCCESS
             self.reason = "Reached remembered food."
@@ -70,24 +71,23 @@ class VisitRememberedFood(Goal):
             world._last_goal = f"{s.name} goal: VisitRememberedFood → moving toward {self.target}"
             return True
 
-        # If we can't move closer this tick, keep goal ACTIVE and try again next tick
+        # Blocked this tick; try again next tick
         world._last_goal = f"{s.name} goal: VisitRememberedFood → blocked"
         return False
-
-# -----------------------------------------------------------------------------
 
 @dataclass
 class GreetFavoriteFriend(Goal):
     """Approach the most liked friend and greet them when adjacent."""
     name: str = "GreetFavoriteFriend"
     target_name: Optional[str] = None
+    threshold: float = 0.8  # minimum affinity to be considered a 'favorite'
 
     def can_start(self, s, world) -> bool:
-        # Pick friend with highest positive affinity
         if not s.memory.friend_affinity:
             return False
+        # Find top friend over the threshold
         best_name = None
-        best_val = 0.8  # threshold for "favorite"
+        best_val = self.threshold
         for k, v in s.memory.friend_affinity.items():
             if v > best_val:
                 best_val = v
@@ -118,7 +118,6 @@ class GreetFavoriteFriend(Goal):
         # If adjacent, greet and succeed
         manhattan = abs(s.x - target.x) + abs(s.y - target.y)
         if manhattan == 1:
-            # Positive interaction
             s.mood = min(5, s.mood + 0.5)
             target.mood = min(5, getattr(target, "mood", 0) + 0.4)
             s.memory.update_affinity(self.target_name, +0.2)
@@ -142,4 +141,77 @@ class GreetFavoriteFriend(Goal):
 
         world._last_goal = f"{s.name} goal: GreetFavoriteFriend → blocked en route to {self.target_name}"
         return False
+
+# -----------------------------------------------------------------------------
+# NEW: SequenceGoal (chaining multiple goals)
+
+@dataclass
+class SequenceGoal(Goal):
+    """Run a list of child goals in order, advancing on SUCCESS.
+    Fails if a child cannot start or fails.
+    """
+    name: str = "Sequence"
+    children: List[Goal] = field(default_factory=list)
+    index: int = 0  # current child index
+
+    def can_start(self, s, world) -> bool:
+        if not self.children:
+            self.reason = "No child goals."
+            return False
+        # Require first goal to be startable
+        return self.children[0].can_start(s, world)
+
+    def start(self, now: int):
+        super().start(now)
+
+    def step(self, s, world) -> bool:
+        if self.index >= len(self.children):
+            self.status = GoalStatus.SUCCESS
+            self.reason = "All child goals completed."
+            return False
+
+        child = self.children[self.index]
+
+        # Initialize child when we reach it
+        if child.status == GoalStatus.PENDING:
+            # If child cannot start right now, the sequence fails
+            if not child.can_start(s, world):
+                self.status = GoalStatus.FAILED
+                self.reason = f"Child {child.name} cannot start."
+                return False
+            child.start(now=world.tick)
+            world._last_goal = f"{s.name} sequence: starting {child.name}"
+
+        # Step the child
+        acted = child.step(s, world)
+
+        # If child finished, advance or finish sequence
+        if child.done():
+            if child.status == GoalStatus.SUCCESS:
+                self.index += 1
+                if self.index >= len(self.children):
+                    self.status = GoalStatus.SUCCESS
+                    self.reason = "Sequence complete."
+                else:
+                    # Next child will be initialized on next step call
+                    next_child = self.children[self.index]
+                    world._last_goal = f"{s.name} sequence: next → {next_child.name}"
+            else:
+                self.status = GoalStatus.FAILED
+                self.reason = f"Child {child.name} failed."
+        return acted
+
+# -----------------------------------------------------------------------------
+# Helper: build the specific chain "Eat → then Greet Favorite Friend"
+
+def build_eat_then_greet_sequence(s) -> Optional[SequenceGoal]:
+    """Create a SequenceGoal: VisitRememberedFood → GreetFavoriteFriend (if available).
+    Returns None if the first goal cannot start.
+    """
+    eat = VisitRememberedFood()
+    greet = GreetFavoriteFriend()  # will pick target_name in can_start
+    seq = SequenceGoal(name="EatThenGreet", children=[eat, greet])
+
+    # Only return if the first step is viable; second is checked when it runs
+    return seq
 ``
