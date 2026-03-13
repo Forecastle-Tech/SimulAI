@@ -5,6 +5,7 @@ from simulai.agents.base import Agent
 from simulai.agents.traits import Traits
 from simulai.agents.emotions import EmotionState, compute_emotion
 from simulai.agents.memory import Memory
+from simulai.agents.goals import Goal, GoalStatus, VisitRememberedFood, GreetFavoriteFriend
 from simulai.environment.resources import Food
 
 DIRECTIONS: List[Tuple[int, int]] = [(0,1),(0,-1),(1,0),(-1,0)]
@@ -17,7 +18,7 @@ NEGATIVE_QUIPS = [
 ]
 
 class Simulite(Agent):
-    """A tiny AI creature with simple needs, personality, memory, and a dash of attitude."""
+    """A tiny AI creature with simple needs, personality, memory, goals, and a dash of attitude."""
     def __init__(self, name: str, x: int, y: int, traits: Optional[Traits] = None):
         super().__init__(name, x, y)
         self.energy = 10
@@ -26,6 +27,10 @@ class Simulite(Agent):
         self.emotion: EmotionState | None = None
         self._recent_event: str | None = None  # used to compute emotion per tick
         self.memory = Memory()
+
+        # Goals
+        self.goal: Optional[Goal] = None
+        self._goal_cooldown = 0  # ticks until we may switch/choose a new goal
 
     # ---- Helpers ----------------------------------------------------------
     def neighbors(self, world) -> list[Tuple[int, int]]:
@@ -46,7 +51,7 @@ class Simulite(Agent):
         best_d = self.manhattan(cur, target)
         for dx, dy in DIRECTIONS:
             nx, ny = self.x + dx, self.y + dy
-            if not world.grid.in_bounds(nx, ny): 
+            if not world.grid.in_bounds(nx, ny):
                 continue
             if world.grid.get(nx, ny) is not None:
                 continue
@@ -93,6 +98,72 @@ class Simulite(Agent):
                 return (nx, ny)
         return None
 
+    # ---- Goal selection ---------------------------------------------------
+    def _favorite_friend_name(self) -> Optional[str]:
+        if not self.memory.friend_affinity:
+            return None
+        # return top positive friend if > 0.8 affinity
+        best_name = None
+        best_val = 0.8
+        for k, v in self.memory.friend_affinity.items():
+            if v > best_val:
+                best_val = v
+                best_name = k
+        return best_name
+
+    def consider_goals(self, world):
+        """Pick a goal based on current state, memory, and cooldown."""
+        if self._goal_cooldown > 0:
+            self._goal_cooldown -= 1
+            return
+
+        # If we already have an active goal, keep it until success/fail
+        if self.goal and not self.goal.done():
+            return
+
+        # Choose a new goal
+        candidates: list[Goal] = []
+
+        # Hungry + remembered food
+        visit_food = VisitRememberedFood()
+        if visit_food.can_start(self, world):
+            candidates.append(visit_food)
+
+        # Sociable + favorite friend
+        fav = self._favorite_friend_name()
+        if fav and self.traits.sociability >= 6:
+            greet = GreetFavoriteFriend(target_name=fav)
+            if greet.can_start(self, world):
+                candidates.append(greet)
+
+        if not candidates:
+            self.goal = None
+            return
+
+        # Naive priority: prefer food when energy low, else greeting
+        if isinstance(candidates[0], VisitRememberedFood):
+            self.goal = candidates[0]
+        else:
+            # choose the first by list order (food first, greet second), or random if multiple
+            self.goal = candidates[0]
+
+        self.goal.start(now=world.tick)
+        world._last_goal = f"{self.name} selects goal: {self.goal.name}"
+
+        # set a short cooldown to avoid flapping
+        self._goal_cooldown = 2
+
+    def act_on_goal(self, world) -> bool:
+        """Execute one step toward the current goal if any. Returns True if acted."""
+        if not self.goal or self.goal.done():
+            return False
+        acted = self.goal.step(self, world)
+        # If goal succeeded/failed, clear sooner
+        if self.goal.done():
+            # short cooldown after finishing a goal
+            self._goal_cooldown = 2
+        return acted
+
     # ---- Turn logic -------------------------------------------------------
     def tick(self, world):
         # Memory decays every tick
@@ -113,7 +184,15 @@ class Simulite(Agent):
             self._update_emotion(world)
             return
 
-        # If hungry and we remember food, head towards it
+        # Choose a goal if needed, then try to act on it
+        self.consider_goals(world)
+        if self.act_on_goal(world):
+            self._update_emotion(world)
+            return
+
+        # If no goal action happened, fall back to baseline behaviors --------------
+
+        # If hungry and we remember food, head toward it
         if self.energy <= 6 and self.memory.last_food:
             step = self.choose_step_towards(world, self.memory.last_food)
             if step:
@@ -125,7 +204,6 @@ class Simulite(Agent):
                 world._last_mood = self.mood
                 self._update_emotion(world)
                 return
-            # If blocked, we'll fall through to other behaviors
 
         # Eat if food is adjacent (also update memory)
         food_loc = self.find_adjacent_food(world)
@@ -142,7 +220,7 @@ class Simulite(Agent):
             self._update_emotion(world)
             return
 
-        # Social behavior: if adjacent to someone, decide based on affinity
+        # Social behavior baseline (when no goal action happened)
         friend_loc = self.find_adjacent_friend(world)
         if friend_loc:
             fx, fy = friend_loc
