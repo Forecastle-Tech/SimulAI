@@ -1,7 +1,8 @@
-from simulai.core.world import World
-from simulai.environment.grid import Grid
 from simulai.agents.simulite import Simulite
 from simulai.agents.traits import Traits
+from simulai.core.world import World
+from simulai.environment.grid import Grid
+
 
 def test_emotion_updates_without_crashing():
     grid = Grid(6, 6)
@@ -12,10 +13,10 @@ def test_emotion_updates_without_crashing():
         w.step()
         assert s.emotion is not None
 
+
 def test_weather_cycles():
     grid = Grid(6, 6)
     w = World(grid)
-    before = w.weather.kind
     for _ in range(w.weather.duration + 1):
         w.step()
     after = w.weather.kind
