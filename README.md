@@ -30,3 +30,13 @@ simulai demo --steps 30 --size 10
 
 # or without installing a console script (fallback)
 python -m simulai.cli demo --steps 30 --size 10
+
+## 💾 Save / Load
+
+Save a simulated world to JSON (or YAML with PyYAML installed):
+
+```bash
+# Save after 20 ticks on a 12x12 grid
+simulai save --file world.json --size 12 --steps 20
+# YAML requires: pip install pyyaml
+simulai save --file world.yaml --size 12 --steps 20
