@@ -49,4 +49,3 @@ class Memory:
             if abs(v) < 1e-3:
                 v = 0.0
             self.friend_affinity[k] = v
-``
