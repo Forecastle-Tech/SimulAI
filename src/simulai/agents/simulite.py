@@ -7,9 +7,7 @@ from simulai.agents.base import Agent
 from simulai.agents.emotions import EmotionState, compute_emotion
 from simulai.agents.goals import (
     Goal,
-    GoalStatus,
     GreetFavoriteFriend,
-    SequenceGoal,
     VisitRememberedFood,
     build_eat_then_greet_sequence,
 )
@@ -105,18 +103,16 @@ class Simulite(Agent):
         return None
 
     def find_adjacent_food(self, world) -> Optional[Tuple[int, int]]:
-        for (nx, ny) in self.neighbors(world):
+        for nx, ny in self.neighbors(world):
             cell = world.grid.get(nx, ny)
             if isinstance(cell, Food):
                 return (nx, ny)
         return None
 
     def find_adjacent_friend(self, world) -> Optional[Tuple[int, int]]:
-        for (nx, ny) in self.neighbors(world):
+        for nx, ny in self.neighbors(world):
             cell = world.grid.get(nx, ny)
-            from simulai.agents.simulite import Simulite as S
-
-            if isinstance(cell, S) and cell is not self:
+            if isinstance(cell, Simulite) and cell is not self:
                 return (nx, ny)
         return None
 
