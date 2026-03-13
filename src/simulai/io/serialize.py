@@ -262,4 +262,3 @@ def load_world(path: str) -> World:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     return world_from_dict(data)
-``
