@@ -9,7 +9,7 @@ description = "SimulAI - Where Your Digital Creatures Develop Attitude."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Robert R. Annan" }]
+authors = [{ name = "Robert Annan" }]
 keywords = ["simulation", "ai", "agents", "emergence", "game", "fun"]
 classifiers = [
   "Programming Language :: Python :: 3",
