@@ -1,28 +1,41 @@
 from __future__ import annotations
+
 import random
-from typing import Tuple, Optional, List
+from typing import List, Optional, Tuple
+
 from simulai.agents.base import Agent
-from simulai.agents.traits import Traits
 from simulai.agents.emotions import EmotionState, compute_emotion
-from simulai.agents.memory import Memory
 from simulai.agents.goals import (
-    Goal, GoalStatus,
-    VisitRememberedFood, GreetFavoriteFriend,
-    SequenceGoal, build_eat_then_greet_sequence
+    Goal,
+    GoalStatus,
+    GreetFavoriteFriend,
+    SequenceGoal,
+    VisitRememberedFood,
+    build_eat_then_greet_sequence,
 )
+from simulai.agents.memory import Memory
+from simulai.agents.traits import Traits
 from simulai.environment.resources import Food
 
 DIRECTIONS: List[Tuple[int, int]] = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
 POSITIVE_QUIPS = [
-    "Nice to see you!", "What a fine day!", "High five!", "You look radiant today!"
+    "Nice to see you!",
+    "What a fine day!",
+    "High five!",
+    "You look radiant today!",
 ]
 NEGATIVE_QUIPS = [
-    "Meh.", "Watch it.", "Not in the mood.", "Hmm."
+    "Meh.",
+    "Watch it.",
+    "Not in the mood.",
+    "Hmm.",
 ]
+
 
 class Simulite(Agent):
     """A tiny AI creature with simple needs, personality, memory, goals, and a dash of attitude."""
+
     def __init__(self, name: str, x: int, y: int, traits: Optional[Traits] = None):
         super().__init__(name, x, y)
         self.energy = 10
@@ -48,7 +61,9 @@ class Simulite(Agent):
     def manhattan(self, a: Tuple[int, int], b: Tuple[int, int]) -> int:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-    def choose_step_towards(self, world, target: Tuple[int, int]) -> Optional[Tuple[int, int]]:
+    def choose_step_towards(
+        self, world, target: Tuple[int, int]
+    ) -> Optional[Tuple[int, int]]:
         """Pick a neighbor step that reduces Manhattan distance to target and is empty."""
         cur = (self.x, self.y)
         best: list[Tuple[int, int]] = []
@@ -69,7 +84,9 @@ class Simulite(Agent):
             return random.choice(best)
         return None
 
-    def choose_step_away_from(self, world, from_pos: Tuple[int, int]) -> Optional[Tuple[int, int]]:
+    def choose_step_away_from(
+        self, world, from_pos: Tuple[int, int]
+    ) -> Optional[Tuple[int, int]]:
         """Pick a neighbor step that increases distance from from_pos and is empty."""
         cur = (self.x, self.y)
         cur_d = self.manhattan(cur, from_pos)
@@ -98,6 +115,7 @@ class Simulite(Agent):
         for (nx, ny) in self.neighbors(world):
             cell = world.grid.get(nx, ny)
             from simulai.agents.simulite import Simulite as S
+
             if isinstance(cell, S) and cell is not self:
                 return (nx, ny)
         return None
@@ -199,7 +217,10 @@ class Simulite(Agent):
                 world.grid.move(self.x, self.y, nx, ny)
                 self.x, self.y = nx, ny
                 self.mood = min(5, self.mood + 0.2)
-                world._last_log = f"{self.name} heads toward remembered food at {self.memory.last_food}."
+                world._last_log = (
+                    f"{self.name} heads toward remembered food at "
+                    f"{self.memory.last_food}."
+                )
                 world._last_mood = self.mood
                 self._update_emotion(world)
                 return
@@ -214,7 +235,9 @@ class Simulite(Agent):
             self.mood = min(5, self.mood + 1.5)
             self.memory.remember_food(fx, fy)
             self._recent_event = "eat"
-            world._last_log = f"{self.name} munches on food at ({fx},{fy}) and remembers this spot."
+            world._last_log = (
+                f"{self.name} munches on food at ({fx},{fy}) and remembers this spot."
+            )
             world._last_mood = self.mood
             self._update_emotion(world)
             return
@@ -233,7 +256,10 @@ class Simulite(Agent):
                         world.grid.move(self.x, self.y, nx, ny)
                         self.x, self.y = nx, ny
                         self.mood = max(-5, self.mood - 0.1)
-                        world._last_log = f"{self.name} avoids {friend.name} (affinity {affinity:+.1f})."
+                        world._last_log = (
+                            f"{self.name} avoids {friend.name} "
+                            f"(affinity {affinity:+.1f})."
+                        )
                         world._last_mood = self.mood
                         self._update_emotion(world)
                         return
@@ -244,14 +270,20 @@ class Simulite(Agent):
                         self.memory.update_affinity(friend.name, +0.4)
                         quip = random.choice(POSITIVE_QUIPS)
                         self._recent_event = "social_pos"
-                        world._last_log = f"{self.name} to {friend.name}: “{quip}” (affinity {self.memory.get_affinity(friend.name):+.1f})"
+                        world._last_log = (
+                            f"{self.name} to {friend.name}: “{quip}” "
+                            f"(affinity {self.memory.get_affinity(friend.name):+.1f})"
+                        )
                     else:
                         self.mood = max(-5, self.mood + 0.2)
                         friend.mood = max(-5, friend.mood - 0.2)
                         self.memory.update_affinity(friend.name, -0.3)
                         quip = random.choice(NEGATIVE_QUIPS)
                         self._recent_event = "social_neg"
-                        world._last_log = f"{self.name} to {friend.name}: “{quip}” (affinity {self.memory.get_affinity(friend.name):+.1f})"
+                        world._last_log = (
+                            f"{self.name} to {friend.name}: “{quip}” "
+                            f"(affinity {self.memory.get_affinity(friend.name):+.1f})"
+                        )
                     world._last_mood = self.mood
                     self._update_emotion(world)
                     return
@@ -280,4 +312,3 @@ class Simulite(Agent):
     def _update_emotion(self, world):
         self.emotion = compute_emotion(self.energy, self.mood, self._recent_event)
         world._last_emotion = str(self.emotion)
-``
