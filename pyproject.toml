@@ -9,7 +9,7 @@ description = "SimulAI - Where Your Digital Creatures Develop Attitude."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Robert R Annan" }]
+authors = [{ name = "Robert R. Annan" }]
 keywords = ["simulation", "ai", "agents", "emergence", "game", "fun"]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -45,7 +45,8 @@ simulai = ["data/**/*.yaml"]
 [project.optional-dependencies]
 dev = [
   "pytest>=7.4",
-  "ruff>=0.4"
+  "ruff>=0.4",
+  "pre-commit>=3.6"
 ]
 yaml = [
   "pyyaml>=6.0"
@@ -60,4 +61,4 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-select = ["E", "F", "I"]  # pycodestyle, pyflakes, isort
+select = ["E", "F", "I"]  # pycodestyle (E), pyflakes (F), isort (I)
