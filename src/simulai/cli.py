@@ -13,12 +13,10 @@ def main():
     parser = argparse.ArgumentParser(prog="simulai", description="SimulAI CLI")
     sub = parser.add_subparsers(dest="command")
 
-    # demo
     demo = sub.add_parser("demo", help="Run a tiny demo world with a few Simulites")
     demo.add_argument("--steps", type=int, default=20, help="Number of time steps")
     demo.add_argument("--size", type=int, default=8, help="Grid size (NxN)")
 
-    # save: build a fresh world, simulate, then save to file
     savep = sub.add_parser(
         "save",
         help="Build a world, run for N steps, then save to JSON/YAML",
@@ -42,7 +40,6 @@ def main():
         help="Override format (otherwise inferred from extension)",
     )
 
-    # load: load a saved world and continue simulating
     loadp = sub.add_parser(
         "load",
         help="Load a saved world (JSON/YAML) and simulate further",
@@ -70,11 +67,9 @@ def build_world(size: int) -> World:
     grid = Grid(width=size, height=size)
     world = World(grid=grid)
 
-    # spawn a couple of Simulites
     world.add_agent(Simulite(name="Zizi", x=1, y=1))
     world.add_agent(Simulite(name="Karo", x=size - 2, y=size - 2))
 
-    # sprinkle initial food
     world.sprinkle_food(count=max(3, size // 2))
     return world
 
@@ -89,11 +84,8 @@ def run_demo(steps: int, size: int):
 
 def cmd_save(args):
     world = build_world(size=args.size)
-
-    # simulate some steps so there's state to save
     for _ in range(args.steps):
         world.step()
-
     save_world(args.file, world, fmt=args.format)
     print(f"✅ Saved world to {args.file}")
 
