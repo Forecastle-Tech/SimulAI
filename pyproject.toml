@@ -15,7 +15,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
   "Topic :: Games/Entertainment :: Simulation",
-  "Topic :: Scientific/Engineering :: Artificial Life"
+  "Topic :: Scientific/Engineering :: Artificial Life",
 ]
 
 # Keep runtime dependencies empty for now to stay lightweight.
@@ -46,10 +46,10 @@ simulai = ["data/**/*.yaml"]
 dev = [
   "pytest>=7.4",
   "ruff>=0.4",
-  "pre-commit>=3.6"
+  "pre-commit>=3.6",
 ]
 yaml = [
-  "pyyaml>=6.0"
+  "pyyaml>=6.0",
 ]
 
 # --- pytest config ---
@@ -61,4 +61,6 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-select = ["E", "F", "I"]  # pycodestyle (E), pyflakes (F), isort (I)
+
+[tool.ruff.lint]
+select = ["E", "F", "I"] # pycodestyle (E), pyflakes (F), isort (I)
