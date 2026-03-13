@@ -41,16 +41,10 @@ class TextRenderer:
             lines.append(" ".join(row))
 
         print("\x1b[2J\x1b[H", end="")  # clear screen
-        w = world.weather
-        w_icon = WEATHER_ICON.get(w.kind, "❓")
-        print(f"SimulAI — tick {world.tick}   Weather: {w_icon} {w.kind} ({w.duration})")
-        print("\n".join(lines))
+        w = getattr(world, "weather", None)
+        if w:
+            w_icon = WEATHER_ICON.get(w.kind, "❓")
+            print(f"SimulAI — tick {world.tick}   Weather: {w_icon} {w.kind} ({w.duration})")
+        else:
+            print(f"SimulAI — tick {world.tick}")
 
-        if hasattr(world, "_last_log"):
-            mood_score = getattr(world, "_last_mood", 0)
-            mood_key = max(-3, min(3, int(mood_score)))
-            emoji = MOOD_EMOJI.get(mood_key, "🙂")
-            extra = ""
-            if hasattr(world, "_last_emotion"):
-                extra = f"  [{world._last_emotion}]"
-            print(f"\n{world._last_log}  {emoji}{extra}")
