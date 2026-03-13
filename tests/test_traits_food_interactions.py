@@ -1,8 +1,9 @@
+from simulai.agents.simulite import Simulite
+from simulai.agents.traits import Traits
 from simulai.core.world import World
 from simulai.environment.grid import Grid
 from simulai.environment.resources import Food
-from simulai.agents.simulite import Simulite
-from simulai.agents.traits import Traits
+
 
 def test_food_increases_energy_and_mood():
     grid = Grid(5, 5)
@@ -16,6 +17,7 @@ def test_food_increases_energy_and_mood():
     w.step()  # should move into food and eat
     assert s.energy > energy_before
     assert s.mood > mood_before
+
 
 def test_social_interaction_affects_mood():
     grid = Grid(5, 5)

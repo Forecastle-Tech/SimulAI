@@ -1,8 +1,9 @@
+from simulai.agents.simulite import Simulite
+from simulai.agents.traits import Traits
 from simulai.core.world import World
 from simulai.environment.grid import Grid
 from simulai.environment.resources import Food
-from simulai.agents.simulite import Simulite
-from simulai.agents.traits import Traits
+
 
 def test_moves_toward_remembered_food_when_hungry():
     grid = Grid(8, 5)
@@ -17,6 +18,7 @@ def test_moves_toward_remembered_food_when_hungry():
     new_dist = abs(s.x - 5) + abs(s.y - 2)
     assert new_dist <= old_dist, "Should not move away from target when hungry."
 
+
 def test_eating_updates_last_food_memory():
     grid = Grid(6, 6)
     w = World(grid)
@@ -25,6 +27,7 @@ def test_eating_updates_last_food_memory():
     grid.place(3, 2, Food(energy=5))
     w.step()  # should move into (3,2) and eat
     assert s.memory.last_food == (3, 2)
+
 
 def test_affinity_updates_on_interaction():
     grid = Grid(6, 6)
@@ -39,6 +42,7 @@ def test_affinity_updates_on_interaction():
     w.step()
     after = a.memory.get_affinity("B")
     assert after != before
+
 
 def test_avoid_disliked_friend():
     grid = Grid(6, 6)

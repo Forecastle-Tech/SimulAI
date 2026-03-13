@@ -1,12 +1,15 @@
 from __future__ import annotations
+
+import random
 from dataclasses import dataclass, field
 from typing import List
-import random
-from simulai.environment.grid import Grid
-from simulai.environment.resources import Food
-from simulai.environment.events import Weather, random_weather
+
 from simulai.agents.base import Agent
 from simulai.agents.simulite import Simulite
+from simulai.environment.events import Weather, random_weather
+from simulai.environment.grid import Grid
+from simulai.environment.resources import Food
+
 
 @dataclass
 class World:

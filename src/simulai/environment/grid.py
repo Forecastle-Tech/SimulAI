@@ -1,6 +1,8 @@
 from __future__ import annotations
-from typing import Optional, Any
+
 import random
+from typing import Any, Optional
+
 
 class Grid:
     def __init__(self, width: int, height: int):
@@ -32,9 +34,6 @@ class Grid:
 
     def random_empty_cell(self):
         empties = [
-            (x, y)
-            for y in range(self.height)
-            for x in range(self.width)
-            if self.get(x, y) is None
+            (x, y) for y in range(self.height) for x in range(self.width) if self.get(x, y) is None
         ]
         return random.choice(empties) if empties else None

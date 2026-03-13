@@ -1,10 +1,12 @@
-from simulai.core.world import World
-from simulai.environment.grid import Grid
 from simulai.agents.simulite import Simulite
 from simulai.agents.traits import Traits
+from simulai.core.world import World
+from simulai.environment.grid import Grid
+
 
 def manhattan(a, b):
-    return abs(a[0]-b[0]) + abs(a[1]-b[1])
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
 
 def test_goal_visit_remembered_food_selected_and_moves_toward():
     grid = Grid(10, 6)
@@ -18,6 +20,7 @@ def test_goal_visit_remembered_food_selected_and_moves_toward():
     # goal should be selected and we should not move further away
     after = manhattan((s.x, s.y), (7, 2))
     assert after <= before
+
 
 def test_goal_greet_favorite_friend_selected():
     grid = Grid(8, 5)

@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 
 @dataclass
 class EmotionState:
@@ -8,6 +10,7 @@ class EmotionState:
 
     def __str__(self) -> str:
         return f"{self.name}:{self.intensity:.1f}"
+
 
 def compute_emotion(energy: int, mood: float, recent_event: str | None) -> EmotionState:
     """

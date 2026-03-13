@@ -1,13 +1,12 @@
-import json
 import os
 import tempfile
 
-from simulai.core.world import World
-from simulai.environment.grid import Grid
 from simulai.agents.simulite import Simulite
 from simulai.agents.traits import Traits
-from simulai.environment.resources import Food
-from simulai.io.serialize import world_to_dict, world_from_dict, save_world, load_world
+from simulai.core.world import World
+from simulai.environment.grid import Grid
+from simulai.io.serialize import load_world, save_world, world_from_dict, world_to_dict
+
 
 def build_small_world():
     grid = Grid(6, 5)
@@ -21,6 +20,7 @@ def build_small_world():
     a.memory.last_food = (2, 1)
     a.memory.friend_affinity = {"B": 1.4}
     return w, a, b
+
 
 def test_world_to_from_dict_roundtrip():
     w, a, b = build_small_world()
@@ -38,6 +38,7 @@ def test_world_to_from_dict_roundtrip():
     a2 = next(ag for ag in w2.agents if ag.name == "A")
     assert a2.memory.last_food == (2, 1)
     assert a2.memory.friend_affinity.get("B", 0) > 1.3
+
 
 def test_save_load_json_tmpfile():
     w, a, b = build_small_world()

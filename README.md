@@ -1,7 +1,7 @@
 # SimulAI
 **Where Your Digital Creatures Develop Attitude.**
 
-SimulAI is a tiny artificial world where **Simulites**—your digital creatures—wander, learn, and develop personality.  
+SimulAI is a tiny artificial world where **Simulites**—your digital creatures—wander, learn, and develop personality.
 Built to be fun, hackable, and easy to extend.
 
 ---

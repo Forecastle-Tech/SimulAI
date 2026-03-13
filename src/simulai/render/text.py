@@ -1,15 +1,16 @@
 from __future__ import annotations
-from simulai.environment.resources import Food
+
 from simulai.agents.simulite import Simulite
+from simulai.environment.resources import Food
 
 MOOD_EMOJI = {
     -3: "😤",
     -2: "🙁",
     -1: "😐",
-     0: "🙂",
-     1: "😄",
-     2: "🤩",
-     3: "🧠",
+    0: "🙂",
+    1: "😄",
+    2: "🤩",
+    3: "🧠",
 }
 
 WEATHER_ICON = {
@@ -19,6 +20,7 @@ WEATHER_ICON = {
     "rain": "🌧️",
     "storm": "⛈️",
 }
+
 
 class TextRenderer:
     def symbol_for(self, cell):
@@ -47,4 +49,3 @@ class TextRenderer:
             print(f"SimulAI — tick {world.tick}   Weather: {w_icon} {w.kind} ({w.duration})")
         else:
             print(f"SimulAI — tick {world.tick}")
-

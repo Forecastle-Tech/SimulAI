@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
+
 
 class Agent(ABC):
     def __init__(self, name: str, x: int, y: int):
@@ -8,5 +10,4 @@ class Agent(ABC):
         self.y = y
 
     @abstractmethod
-    def tick(self, world):
-        ...
+    def tick(self, world): ...

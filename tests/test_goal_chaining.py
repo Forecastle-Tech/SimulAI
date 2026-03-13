@@ -16,7 +16,6 @@ def test_chain_selected_when_hungry_and_food_remembered():
     w.add_agent(a)
     w.add_agent(b)
 
-    # conditions: hungry + remembered food + favorite friend present
     a.memory.remember_food(5, 2)
     a.memory.update_affinity("B", +1.2)
     a.energy = 5

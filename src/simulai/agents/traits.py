@@ -1,6 +1,8 @@
 from __future__ import annotations
-from dataclasses import dataclass
+
 import random
+from dataclasses import dataclass
+
 
 @dataclass
 class Traits:
@@ -9,6 +11,7 @@ class Traits:
     - curiosity: how likely they are to explore (0..10)
     - sociability: how likely they are to approach others (0..10)
     """
+
     curiosity: int
     sociability: int
 
@@ -18,4 +21,3 @@ class Traits:
         curiosity = random.randint(0, 10)
         sociability = random.randint(0, 10)
         return cls(curiosity=curiosity, sociability=sociability)
-
