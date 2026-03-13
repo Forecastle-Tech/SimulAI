@@ -12,7 +12,7 @@ from simulai.agents.goals import (
 )
 from simulai.environment.resources import Food
 
-DIRECTIONS: List[Tuple[int, int]] = [(0,1),(0,-1),(1,0),(-1,0)]
+DIRECTIONS: List[Tuple[int, int]] = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
 POSITIVE_QUIPS = [
     "Nice to see you!", "What a fine day!", "High five!", "You look radiant today!"
@@ -38,19 +38,20 @@ class Simulite(Agent):
 
     # ---- Helpers ----------------------------------------------------------
     def neighbors(self, world) -> list[Tuple[int, int]]:
-        out: list[Tuple[int,int]] = []
+        out: list[Tuple[int, int]] = []
         for dx, dy in DIRECTIONS:
             nx, ny = self.x + dx, self.y + dy
             if world.grid.in_bounds(nx, ny):
                 out.append((nx, ny))
         return out
 
-    def manhattan(self, a: Tuple[int,int], b: Tuple[int,int]) -> int:
+    def manhattan(self, a: Tuple[int, int], b: Tuple[int, int]) -> int:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-    def choose_step_towards(self, world, target: Tuple[int,int]) -> Optional[Tuple[int,int]]:
+    def choose_step_towards(self, world, target: Tuple[int, int]) -> Optional[Tuple[int, int]]:
+        """Pick a neighbor step that reduces Manhattan distance to target and is empty."""
         cur = (self.x, self.y)
-        best: list[Tuple[int,int]] = []
+        best: list[Tuple[int, int]] = []
         best_d = self.manhattan(cur, target)
         for dx, dy in DIRECTIONS:
             nx, ny = self.x + dx, self.y + dy
@@ -68,10 +69,11 @@ class Simulite(Agent):
             return random.choice(best)
         return None
 
-    def choose_step_away_from(self, world, from_pos: Tuple[int,int]) -> Optional[Tuple[int,int]]:
+    def choose_step_away_from(self, world, from_pos: Tuple[int, int]) -> Optional[Tuple[int, int]]:
+        """Pick a neighbor step that increases distance from from_pos and is empty."""
         cur = (self.x, self.y)
         cur_d = self.manhattan(cur, from_pos)
-        candidates: list[Tuple[int,int]] = []
+        candidates: list[Tuple[int, int]] = []
         for dx, dy in DIRECTIONS:
             nx, ny = self.x + dx, self.y + dy
             if not world.grid.in_bounds(nx, ny):
@@ -129,7 +131,7 @@ class Simulite(Agent):
             if seq and seq.can_start(self, world):
                 candidates.append(seq)
 
-        # Fallback individual goals (if no chain chosen)
+        # Fallback individual goals
         visit_food = VisitRememberedFood()
         if visit_food.can_start(self, world):
             candidates.append(visit_food)
@@ -144,13 +146,12 @@ class Simulite(Agent):
             self.goal = None
             return
 
-        # Naive priority: chained sequence first, then food, then greet
-        # candidates are added in that order above
+        # Priority: sequence first, then food, then greet
         self.goal = candidates[0]
         self.goal.start(now=world.tick)
         world._last_goal = f"{self.name} selects goal: {self.goal.name}"
 
-        # short cooldown to avoid flapping
+        # avoid flapping
         self._goal_cooldown = 2
 
     def act_on_goal(self, world) -> bool:
@@ -173,9 +174,9 @@ class Simulite(Agent):
 
         # If out of energy, nap
         if self.energy <= 0:
-            self.energy = 6
+            self.energy = 6  # nap restores energy
             self.mood = max(-5, self.mood - 1)
-            world.grid.place(self.x, self.y, self)
+            world.grid.place(self.x, self.y, self)  # stay put
             self._recent_event = "nap"
             world._last_log = f"{self.name} takes a nap."
             world._last_mood = self.mood
