@@ -57,9 +57,7 @@ class Simulite(Agent):
     def manhattan(self, a: Tuple[int, int], b: Tuple[int, int]) -> int:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-    def choose_step_towards(
-        self, world, target: Tuple[int, int]
-    ) -> Optional[Tuple[int, int]]:
+    def choose_step_towards(self, world, target: Tuple[int, int]) -> Optional[Tuple[int, int]]:
         cur = (self.x, self.y)
         best: list[Tuple[int, int]] = []
         best_d = self.manhattan(cur, target)
@@ -79,9 +77,7 @@ class Simulite(Agent):
             return random.choice(best)
         return None
 
-    def choose_step_away_from(
-        self, world, from_pos: Tuple[int, int]
-    ) -> Optional[Tuple[int, int]]:
+    def choose_step_away_from(self, world, from_pos: Tuple[int, int]) -> Optional[Tuple[int, int]]:
         cur = (self.x, self.y)
         cur_d = self.manhattan(cur, from_pos)
         candidates: list[Tuple[int, int]] = []
@@ -193,8 +189,7 @@ class Simulite(Agent):
                 self.x, self.y = nx, ny
                 self.mood = min(5, self.mood + 0.2)
                 world._last_log = (
-                    f"{self.name} heads toward remembered food at "
-                    f"{self.memory.last_food}."
+                    f"{self.name} heads toward remembered food at " f"{self.memory.last_food}."
                 )
                 world._last_mood = self.mood
                 self._update_emotion(world)
@@ -209,9 +204,7 @@ class Simulite(Agent):
             self.mood = min(5, self.mood + 1.5)
             self.memory.remember_food(fx, fy)
             self._recent_event = "eat"
-            world._last_log = (
-                f"{self.name} munches on food at ({fx},{fy}) and remembers this spot."
-            )
+            world._last_log = f"{self.name} munches on food at ({fx},{fy}) and remembers this spot."
             world._last_mood = self.mood
             self._update_emotion(world)
             return
@@ -230,8 +223,7 @@ class Simulite(Agent):
                         self.x, self.y = nx, ny
                         self.mood = max(-5, self.mood - 0.1)
                         world._last_log = (
-                            f"{self.name} avoids {friend.name} "
-                            f"(affinity {affinity:+.1f})."
+                            f"{self.name} avoids {friend.name} " f"(affinity {affinity:+.1f})."
                         )
                         world._last_mood = self.mood
                         self._update_emotion(world)

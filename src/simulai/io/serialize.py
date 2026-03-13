@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from simulai.agents.simulite import Simulite
+from simulai.agents.traits import Traits
 from simulai.core.world import World
 from simulai.environment.grid import Grid
 from simulai.environment.resources import Food
@@ -29,6 +30,14 @@ def world_to_dict(world: World) -> dict:
                         "y": obj.y,
                         "energy": obj.energy,
                         "mood": obj.mood,
+                        "traits": {
+                            "curiosity": obj.traits.curiosity,
+                            "sociability": obj.traits.sociability,
+                        },
+                        "memory": {
+                            "last_food": obj.memory.last_food,
+                            "friend_affinity": dict(obj.memory.friend_affinity),
+                        },
                     }
                 )
             elif isinstance(obj, Food):
@@ -52,19 +61,33 @@ def world_from_dict(data: dict) -> World:
         grid.place(item["x"], item["y"], Food())
 
     for item in data.get("agents", []):
-        agent = Simulite(item["name"], item["x"], item["y"])
+        traits_data = item.get("traits", {})
+        traits = Traits(
+            curiosity=traits_data.get("curiosity", 5),
+            sociability=traits_data.get("sociability", 5),
+        )
+        agent = Simulite(item["name"], item["x"], item["y"], traits=traits)
         agent.energy = item.get("energy", agent.energy)
         agent.mood = item.get("mood", agent.mood)
+
+        memory_data = item.get("memory", {})
+        agent.memory.last_food = memory_data.get("last_food")
+        agent.memory.friend_affinity = dict(memory_data.get("friend_affinity", {}))
+
         world.add_agent(agent)
 
     return world
 
 
-def save_world(world: World, path: str | Path) -> None:
+def save_world(path: str | Path, world: World, fmt: str | None = None) -> None:
     path = Path(path)
     data = world_to_dict(world)
 
-    if path.suffix.lower() in {".yaml", ".yml"}:
+    out_fmt = fmt.lower() if fmt else path.suffix.lower().lstrip(".")
+    if out_fmt == "":
+        out_fmt = "json"
+
+    if out_fmt in {"yaml", "yml"}:
         if yaml is None:
             raise RuntimeError("Cannot save YAML; PyYAML not installed. Run: pip install pyyaml")
         with open(path, "w", encoding="utf-8") as f:
@@ -76,8 +99,9 @@ def save_world(world: World, path: str | Path) -> None:
 
 def load_world(path: str | Path) -> World:
     path = Path(path)
+    in_fmt = path.suffix.lower().lstrip(".")
 
-    if path.suffix.lower() in {".yaml", ".yml"}:
+    if in_fmt in {"yaml", "yml"}:
         if yaml is None:
             raise RuntimeError("Cannot load YAML; PyYAML not installed. Run: pip install pyyaml")
         with open(path, "r", encoding="utf-8") as f:
