@@ -18,18 +18,15 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Life",
 ]
 
-# Keep runtime dependencies empty for now to stay lightweight.
 dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/Forecastle-Tech/SimulAI"
 Issues = "https://github.com/Forecastle-Tech/SimulAI/issues"
 
-# Expose CLI: `simulai`
 [project.scripts]
 simulai = "simulai.cli:main"
 
-# --- setuptools (src-layout) ---
 [tool.setuptools]
 package-dir = { "" = "src" }
 
@@ -37,11 +34,9 @@ package-dir = { "" = "src" }
 where = ["src"]
 include = ["simulai", "simulai.*"]
 
-# Include YAML data files shipped with the package (if any)
 [tool.setuptools.package-data]
 simulai = ["data/**/*.yaml"]
 
-# --- Optional dependencies (extras) ---
 [project.optional-dependencies]
 dev = [
   "pytest>=7.4",
@@ -52,15 +47,13 @@ yaml = [
   "pyyaml>=6.0",
 ]
 
-# --- pytest config ---
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
 
-# --- Ruff linter config ---
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I"] # pycodestyle (E), pyflakes (F), isort (I)
+select = ["E", "F", "I"]

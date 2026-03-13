@@ -14,4 +14,8 @@ class Traits:
 
     @classmethod
     def random(cls) -> "Traits":
-        # Mildly biased toward midd
+        # Mildly biased toward middle values
+        curiosity = random.randint(0, 10)
+        sociability = random.randint(0, 10)
+        return cls(curiosity=curiosity, sociability=sociability)
+

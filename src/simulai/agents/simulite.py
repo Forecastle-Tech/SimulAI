@@ -37,17 +37,15 @@ class Simulite(Agent):
     def __init__(self, name: str, x: int, y: int, traits: Optional[Traits] = None):
         super().__init__(name, x, y)
         self.energy = 10
-        self.mood = 0.0  # ~ -5..+5 (soft cap)
+        self.mood = 0.0
         self.traits = traits or Traits.random()
         self.emotion: EmotionState | None = None
-        self._recent_event: str | None = None  # used to compute emotion per tick
+        self._recent_event: str | None = None
         self.memory = Memory()
 
-        # Goals
         self.goal: Optional[Goal] = None
-        self._goal_cooldown = 0  # ticks until we may switch/choose a new goal
+        self._goal_cooldown = 0
 
-    # ---- Helpers ----------------------------------------------------------
     def neighbors(self, world) -> list[Tuple[int, int]]:
         out: list[Tuple[int, int]] = []
         for dx, dy in DIRECTIONS:
@@ -62,7 +60,6 @@ class Simulite(Agent):
     def choose_step_towards(
         self, world, target: Tuple[int, int]
     ) -> Optional[Tuple[int, int]]:
-        """Pick a neighbor step that reduces Manhattan distance to target and is empty."""
         cur = (self.x, self.y)
         best: list[Tuple[int, int]] = []
         best_d = self.manhattan(cur, target)
@@ -85,7 +82,6 @@ class Simulite(Agent):
     def choose_step_away_from(
         self, world, from_pos: Tuple[int, int]
     ) -> Optional[Tuple[int, int]]:
-        """Pick a neighbor step that increases distance from from_pos and is empty."""
         cur = (self.x, self.y)
         cur_d = self.manhattan(cur, from_pos)
         candidates: list[Tuple[int, int]] = []
@@ -116,7 +112,6 @@ class Simulite(Agent):
                 return (nx, ny)
         return None
 
-    # ---- Goal selection ---------------------------------------------------
     def _favorite_friend_name(self) -> Optional[str]:
         if not self.memory.friend_affinity:
             return None
@@ -129,7 +124,6 @@ class Simulite(Agent):
         return best_name
 
     def consider_goals(self, world):
-        """Pick a goal based on current state, memory, and cooldown."""
         if self._goal_cooldown > 0:
             self._goal_cooldown -= 1
             return
@@ -139,13 +133,11 @@ class Simulite(Agent):
 
         candidates: List[Goal] = []
 
-        # Prefer CHAIN: Eat -> then Greet (if hungry and food remembered)
         if self.memory.last_food is not None and self.energy <= 7:
             seq = build_eat_then_greet_sequence(self)
             if seq and seq.can_start(self, world):
                 candidates.append(seq)
 
-        # Fallback individual goals
         visit_food = VisitRememberedFood()
         if visit_food.can_start(self, world):
             candidates.append(visit_food)
@@ -160,16 +152,12 @@ class Simulite(Agent):
             self.goal = None
             return
 
-        # Priority: sequence first, then food, then greet
         self.goal = candidates[0]
         self.goal.start(now=world.tick)
         world._last_goal = f"{self.name} selects goal: {self.goal.name}"
-
-        # avoid flapping
         self._goal_cooldown = 2
 
     def act_on_goal(self, world) -> bool:
-        """Execute one step toward the current goal if any. Returns True if acted."""
         if not self.goal or self.goal.done():
             return False
         acted = self.goal.step(self, world)
@@ -177,35 +165,26 @@ class Simulite(Agent):
             self._goal_cooldown = 2
         return acted
 
-    # ---- Turn logic -------------------------------------------------------
     def tick(self, world):
-        # Memory decays every tick
         self.memory.decay()
         self._recent_event = None
-
-        # Passive energy drain
         self.energy -= 1
 
-        # If out of energy, nap
         if self.energy <= 0:
-            self.energy = 6  # nap restores energy
+            self.energy = 6
             self.mood = max(-5, self.mood - 1)
-            world.grid.place(self.x, self.y, self)  # stay put
+            world.grid.place(self.x, self.y, self)
             self._recent_event = "nap"
             world._last_log = f"{self.name} takes a nap."
             world._last_mood = self.mood
             self._update_emotion(world)
             return
 
-        # Try goals first (including chain)
         self.consider_goals(world)
         if self.act_on_goal(world):
             self._update_emotion(world)
             return
 
-        # Fallback behaviors -------------------------------------------------
-
-        # If hungry and we remember food, head toward it
         if self.energy <= 6 and self.memory.last_food:
             step = self.choose_step_towards(world, self.memory.last_food)
             if step:
@@ -221,7 +200,6 @@ class Simulite(Agent):
                 self._update_emotion(world)
                 return
 
-        # Eat if food is adjacent (also update memory)
         food_loc = self.find_adjacent_food(world)
         if food_loc:
             fx, fy = food_loc
@@ -238,7 +216,6 @@ class Simulite(Agent):
             self._update_emotion(world)
             return
 
-        # Social baseline
         friend_loc = self.find_adjacent_friend(world)
         if friend_loc:
             fx, fy = friend_loc
@@ -284,7 +261,6 @@ class Simulite(Agent):
                     self._update_emotion(world)
                     return
 
-        # Otherwise wander
         attempts = 1 + (self.traits.curiosity // 4)
         for _ in range(attempts):
             dx, dy = random.choice(DIRECTIONS)
