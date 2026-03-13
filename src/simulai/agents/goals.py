@@ -214,4 +214,3 @@ def build_eat_then_greet_sequence(s) -> Optional[SequenceGoal]:
 
     # Only return if the first step is viable; second is checked when it runs
     return seq
-``
