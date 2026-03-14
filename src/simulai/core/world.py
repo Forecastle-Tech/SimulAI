@@ -1,60 +1,87 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List
 
-from simulai.agents.base import Agent
-from simulai.agents.simulite import Simulite
-from simulai.environment.events import Weather, random_weather
-from simulai.environment.grid import Grid
 from simulai.environment.resources import Food
 
 
 @dataclass
-class World:
-    grid: Grid
-    agents: List[Agent] = field(default_factory=list)
-    tick: int = 0
-    weather: Weather = field(default_factory=random_weather)
+class Weather:
+    kind: str = "clear"
+    icon: str = "☀️"
+    duration: int = 5
 
-    def add_agent(self, agent: Agent):
+    def step(self) -> None:
+        self.duration -= 1
+        if self.duration <= 0:
+            self._roll_next()
+
+    def _roll_next(self) -> None:
+        options = [
+            ("clear", "☀️", random.randint(4, 6)),
+            ("cloudy", "☁️", random.randint(3, 5)),
+            ("breezy", "🍃", random.randint(3, 5)),
+            ("rainy", "🌧️", random.randint(3, 5)),
+        ]
+        self.kind, self.icon, self.duration = random.choice(options)
+
+
+class World:
+    def __init__(self, grid):
+        self.grid = grid
+        self.agents: List = []
+        self.tick = 0
+
+        self.weather = Weather()
+
+        self._last_log = ""
+        self._last_mood = 0.0
+        self._last_emotion = ""
+        self._last_goal = ""
+
+        self.food_regrow_interval = 12
+        self.food_regrow_amount = 2
+
+    def add_agent(self, agent) -> None:
         self.agents.append(agent)
         self.grid.place(agent.x, agent.y, agent)
 
-    def sprinkle_food(self, count: int = 5):
-        """Place `count` Food objects at random empty cells."""
-        placed = 0
-        attempts = 0
-        while placed < count and attempts < count * 10:
-            attempts += 1
-            spot = self.grid.random_empty_cell()
-            if not spot:
-                break
-            x, y = spot
-            if self.grid.get(x, y) is None:
-                self.grid.place(x, y, Food())
-                placed += 1
+    def sprinkle_food(self, count: int = 3) -> None:
+        empty_cells = []
 
-    def _advance_weather(self):
-        # Decrement duration; roll new weather if expired
-        self.weather.duration -= 1
-        if self.weather.duration <= 0:
-            self.weather = random_weather()
+        for y in range(self.grid.height):
+            for x in range(self.grid.width):
+                if self.grid.get(x, y) is None:
+                    empty_cells.append((x, y))
 
-    def step(self):
+        if not empty_cells:
+            return
+
+        random.shuffle(empty_cells)
+
+        for x, y in empty_cells[:count]:
+            self.grid.place(x, y, Food())
+
+    def step(self) -> None:
         self.tick += 1
 
-        # Weather cycles every tick; food sometimes spawns
-        self._advance_weather()
-        if self.tick % 7 == 0:
-            self.sprinkle_food(count=random.choice([1, 2]))
+        self.weather.step()
 
-        # Apply weather influence (simple: rain/storm reduces curiosity for Simulites)
+        self._last_log = ""
+        self._last_goal = ""
+
         for agent in list(self.agents):
-            if isinstance(agent, Simulite):
-                if self.weather.kind in ("rain", "storm"):
-                    # temporary nudge to mood/curiosity via mood
-                    agent.mood = max(-5, agent.mood - 0.1)
-
             agent.tick(self)
+
+        if self.tick % self.food_regrow_interval == 0:
+            self.sprinkle_food(self.food_regrow_amount)
+            self._last_log = "New food sprouted."
+
+    def summary(self) -> str:
+        return (
+            f"SimulAI — tick {self.tick}   "
+            f"Weather: {self.weather.icon} "
+            f"{self.weather.kind} ({self.weather.duration})"
+        )

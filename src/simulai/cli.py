@@ -6,6 +6,7 @@ from simulai.agents.simulite import Simulite
 from simulai.core.world import World
 from simulai.environment.grid import Grid
 from simulai.io.serialize import load_world, save_world
+from simulai.render.pygame_renderer import PygameRenderer
 from simulai.render.text import TextRenderer
 
 
@@ -16,24 +17,21 @@ def main():
     demo = sub.add_parser("demo", help="Run a tiny demo world with a few Simulites")
     demo.add_argument("--steps", type=int, default=20, help="Number of time steps")
     demo.add_argument("--size", type=int, default=8, help="Grid size (NxN)")
+    demo.add_argument(
+        "--view",
+        choices=["text", "pygame"],
+        default="text",
+        help="Renderer to use",
+    )
+    demo.add_argument("--fps", type=int, default=6, help="Viewer speed for pygame")
 
     savep = sub.add_parser(
         "save",
         help="Build a world, run for N steps, then save to JSON/YAML",
     )
-    savep.add_argument(
-        "--file",
-        "-f",
-        required=True,
-        help="Output file path (e.g., world.json / world.yaml)",
-    )
+    savep.add_argument("--file", "-f", required=True, help="Output file path")
     savep.add_argument("--size", type=int, default=10, help="Grid size (NxN)")
-    savep.add_argument(
-        "--steps",
-        type=int,
-        default=20,
-        help="Steps to simulate before saving",
-    )
+    savep.add_argument("--steps", type=int, default=20, help="Steps before saving")
     savep.add_argument(
         "--format",
         choices=["json", "yaml"],
@@ -45,16 +43,18 @@ def main():
         help="Load a saved world (JSON/YAML) and simulate further",
     )
     loadp.add_argument("--file", "-f", required=True, help="Input file path")
+    loadp.add_argument("--steps", type=int, default=20, help="Steps after loading")
     loadp.add_argument(
-        "--steps",
-        type=int,
-        default=20,
-        help="Steps to simulate after loading",
+        "--view",
+        choices=["text", "pygame"],
+        default="text",
+        help="Renderer to use",
     )
+    loadp.add_argument("--fps", type=int, default=6, help="Viewer speed for pygame")
 
     args = parser.parse_args()
     if args.command == "demo":
-        run_demo(steps=args.steps, size=args.size)
+        run_demo(steps=args.steps, size=args.size, view=args.view, fps=args.fps)
     elif args.command == "save":
         cmd_save(args)
     elif args.command == "load":
@@ -74,12 +74,28 @@ def build_world(size: int) -> World:
     return world
 
 
-def run_demo(steps: int, size: int):
+def get_renderer(view: str):
+    if view == "pygame":
+        return PygameRenderer()
+    return TextRenderer()
+
+
+def run_demo(steps: int, size: int, view: str, fps: int):
     world = build_world(size=size)
-    renderer = TextRenderer()
-    for _ in range(steps):
-        world.step()
-        renderer.render(world)
+    renderer = get_renderer(view)
+
+    try:
+        for _ in range(steps):
+            world.step()
+            if view == "pygame":
+                keep_running = renderer.render(world, fps=fps)
+                if not keep_running:
+                    break
+            else:
+                renderer.render(world)
+    finally:
+        if view == "pygame":
+            renderer.close()
 
 
 def cmd_save(args):
@@ -92,14 +108,24 @@ def cmd_save(args):
 
 def cmd_load(args):
     world = load_world(args.file)
-    renderer = TextRenderer()
+    renderer = get_renderer(args.view)
     print(
         f"📂 Loaded world from {args.file} "
         f"(tick={world.tick}, size={world.grid.width}x{world.grid.height})"
     )
-    for _ in range(args.steps):
-        world.step()
-        renderer.render(world)
+
+    try:
+        for _ in range(args.steps):
+            world.step()
+            if args.view == "pygame":
+                keep_running = renderer.render(world, fps=args.fps)
+                if not keep_running:
+                    break
+            else:
+                renderer.render(world)
+    finally:
+        if args.view == "pygame":
+            renderer.close()
 
 
 if __name__ == "__main__":

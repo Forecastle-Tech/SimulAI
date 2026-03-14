@@ -61,18 +61,21 @@ class Simulite(Agent):
         cur = (self.x, self.y)
         best: list[Tuple[int, int]] = []
         best_d = self.manhattan(cur, target)
+
         for dx, dy in DIRECTIONS:
             nx, ny = self.x + dx, self.y + dy
             if not world.grid.in_bounds(nx, ny):
                 continue
             if world.grid.get(nx, ny) is not None:
                 continue
+
             d = self.manhattan((nx, ny), target)
             if d < best_d:
                 best = [(nx, ny)]
                 best_d = d
             elif d == best_d:
                 best.append((nx, ny))
+
         if best:
             return random.choice(best)
         return None
@@ -81,15 +84,18 @@ class Simulite(Agent):
         cur = (self.x, self.y)
         cur_d = self.manhattan(cur, from_pos)
         candidates: list[Tuple[int, int]] = []
+
         for dx, dy in DIRECTIONS:
             nx, ny = self.x + dx, self.y + dy
             if not world.grid.in_bounds(nx, ny):
                 continue
             if world.grid.get(nx, ny) is not None:
                 continue
+
             d = self.manhattan((nx, ny), from_pos)
             if d > cur_d:
                 candidates.append((nx, ny))
+
         if candidates:
             return random.choice(candidates)
         return None
@@ -111,12 +117,13 @@ class Simulite(Agent):
     def _favorite_friend_name(self) -> Optional[str]:
         if not self.memory.friend_affinity:
             return None
+
         best_name = None
         best_val = 0.8
-        for k, v in self.memory.friend_affinity.items():
-            if v > best_val:
-                best_val = v
-                best_name = k
+        for name, value in self.memory.friend_affinity.items():
+            if value > best_val:
+                best_val = value
+                best_name = name
         return best_name
 
     def consider_goals(self, world):
@@ -129,7 +136,7 @@ class Simulite(Agent):
 
         candidates: List[Goal] = []
 
-        if self.memory.last_food is not None and self.energy <= 7:
+        if self.memory.best_food_location() is not None and self.energy <= 7:
             seq = build_eat_then_greet_sequence(self)
             if seq and seq.can_start(self, world):
                 candidates.append(seq)
@@ -156,6 +163,7 @@ class Simulite(Agent):
     def act_on_goal(self, world) -> bool:
         if not self.goal or self.goal.done():
             return False
+
         acted = self.goal.step(self, world)
         if self.goal.done():
             self._goal_cooldown = 2
@@ -181,15 +189,16 @@ class Simulite(Agent):
             self._update_emotion(world)
             return
 
-        if self.energy <= 6 and self.memory.last_food:
-            step = self.choose_step_towards(world, self.memory.last_food)
+        remembered_food = self.memory.best_food_location()
+        if self.energy <= 6 and remembered_food:
+            step = self.choose_step_towards(world, remembered_food)
             if step:
                 nx, ny = step
                 world.grid.move(self.x, self.y, nx, ny)
                 self.x, self.y = nx, ny
                 self.mood = min(5, self.mood + 0.2)
                 world._last_log = (
-                    f"{self.name} heads toward remembered food at " f"{self.memory.last_food}."
+                    f"{self.name} heads toward remembered food at " f"{remembered_food}."
                 )
                 world._last_mood = self.mood
                 self._update_emotion(world)
@@ -213,8 +222,10 @@ class Simulite(Agent):
         if friend_loc:
             fx, fy = friend_loc
             friend = world.grid.get(fx, fy)
+
             if friend is not None and isinstance(friend, Simulite):
                 affinity = self.memory.get_affinity(friend.name)
+
                 if affinity <= -1.0:
                     step = self.choose_step_away_from(world, (fx, fy))
                     if step:
@@ -228,6 +239,7 @@ class Simulite(Agent):
                         world._last_mood = self.mood
                         self._update_emotion(world)
                         return
+
                 if self.traits.sociability >= 6:
                     if self.mood >= 0:
                         self.mood = min(5, self.mood + 0.5)
@@ -236,7 +248,7 @@ class Simulite(Agent):
                         quip = random.choice(POSITIVE_QUIPS)
                         self._recent_event = "social_pos"
                         world._last_log = (
-                            f"{self.name} to {friend.name}: “{quip}” "
+                            f'{self.name} to {friend.name}: "{quip}" '
                             f"(affinity {self.memory.get_affinity(friend.name):+.1f})"
                         )
                     else:
@@ -246,9 +258,10 @@ class Simulite(Agent):
                         quip = random.choice(NEGATIVE_QUIPS)
                         self._recent_event = "social_neg"
                         world._last_log = (
-                            f"{self.name} to {friend.name}: “{quip}” "
+                            f'{self.name} to {friend.name}: "{quip}" '
                             f"(affinity {self.memory.get_affinity(friend.name):+.1f})"
                         )
+
                     world._last_mood = self.mood
                     self._update_emotion(world)
                     return
@@ -257,6 +270,7 @@ class Simulite(Agent):
         for _ in range(attempts):
             dx, dy = random.choice(DIRECTIONS)
             nx, ny = self.x + dx, self.y + dy
+
             if world.grid.in_bounds(nx, ny) and world.grid.get(nx, ny) is None:
                 world.grid.move(self.x, self.y, nx, ny)
                 self.x, self.y = nx, ny
