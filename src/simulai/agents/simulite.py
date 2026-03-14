@@ -136,7 +136,7 @@ class Simulite(Agent):
 
         candidates: List[Goal] = []
 
-        if self.memory.best_food_location() is not None and self.energy <= 7:
+        if self.memory.best_food_location((self.x, self.y)) is not None and self.energy <= 7:
             seq = build_eat_then_greet_sequence(self)
             if seq and seq.can_start(self, world):
                 candidates.append(seq)
@@ -189,7 +189,7 @@ class Simulite(Agent):
             self._update_emotion(world)
             return
 
-        remembered_food = self.memory.best_food_location()
+        remembered_food = self.memory.best_food_location((self.x, self.y))
         if self.energy <= 6 and remembered_food:
             step = self.choose_step_towards(world, remembered_food)
             if step:
