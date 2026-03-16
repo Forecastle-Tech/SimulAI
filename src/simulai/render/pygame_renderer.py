@@ -14,6 +14,7 @@ PANEL_BG_COLOR = (24, 24, 32)
 PANEL_BORDER_COLOR = (70, 70, 90)
 PANEL_TITLE_COLOR = (255, 255, 255)
 PANEL_TEXT_COLOR = (210, 210, 210)
+ZONE_TEXT_COLOR = (140, 140, 160)
 
 MOOD_COLORS = {
     "happy": (80, 200, 120),
@@ -145,6 +146,23 @@ class PygameRenderer:
                     self.cell_size,
                 )
                 pygame.draw.rect(self.screen, GRID_COLOR, rect, width=1)
+
+    def _draw_zone_labels(self, world):
+        origin_x, origin_y = self._grid_origin()
+
+        for zone in getattr(world, "food_zones", []):
+            zx = (zone["x1"] + zone["x2"]) // 2
+            zy = (zone["y1"] + zone["y2"]) // 2
+
+            px = origin_x + zx * self.cell_size + self.cell_size // 2
+            py = origin_y + zy * self.cell_size + self.cell_size // 2
+
+            name = zone["name"].capitalize()
+
+            text_surface = self.small_font.render(name, True, ZONE_TEXT_COLOR)
+            rect = text_surface.get_rect(center=(px, py))
+
+            self.screen.blit(text_surface, rect)
 
     def _draw_food(self, x: int, y: int):
         origin_x, origin_y = self._grid_origin()
@@ -314,6 +332,7 @@ class PygameRenderer:
 
         self.screen.fill(BG_COLOR)
         self._draw_grid(world)
+        self._draw_zone_labels(world)
 
         for y in range(world.grid.height):
             for x in range(world.grid.width):

@@ -44,25 +44,77 @@ class World:
         self.food_regrow_interval = 12
         self.food_regrow_amount = 2
 
+        # Ecosystem zones
+        self.food_zones = self._build_food_zones()
+
+    def _build_food_zones(self) -> list[dict]:
+        width = self.grid.width
+        height = self.grid.height
+
+        return [
+            {
+                "name": "forest",
+                "x1": 0,
+                "y1": 0,
+                "x2": max(1, width // 3),
+                "y2": height - 1,
+                "weight": 0.6,
+            },
+            {
+                "name": "plains",
+                "x1": max(1, width // 3),
+                "y1": 0,
+                "x2": max(2, (2 * width) // 3),
+                "y2": height - 1,
+                "weight": 0.3,
+            },
+            {
+                "name": "desert",
+                "x1": max(2, (2 * width) // 3),
+                "y1": 0,
+                "x2": width - 1,
+                "y2": height - 1,
+                "weight": 0.1,
+            },
+        ]
+
     def add_agent(self, agent) -> None:
         self.agents.append(agent)
         self.grid.place(agent.x, agent.y, agent)
 
+    def _empty_cells_in_zone(self, zone: dict) -> list[tuple[int, int]]:
+        cells = []
+
+        for y in range(zone["y1"], zone["y2"] + 1):
+            for x in range(zone["x1"], zone["x2"] + 1):
+                if self.grid.in_bounds(x, y) and self.grid.get(x, y) is None:
+                    cells.append((x, y))
+
+        return cells
+
     def sprinkle_food(self, count: int = 3) -> None:
-        empty_cells = []
-
-        for y in range(self.grid.height):
-            for x in range(self.grid.width):
-                if self.grid.get(x, y) is None:
-                    empty_cells.append((x, y))
-
-        if not empty_cells:
+        if count <= 0:
             return
 
-        random.shuffle(empty_cells)
+        placed = 0
+        max_attempts = count * 10
+        attempts = 0
 
-        for x, y in empty_cells[:count]:
+        while placed < count and attempts < max_attempts:
+            attempts += 1
+            zone = random.choices(
+                self.food_zones,
+                weights=[z["weight"] for z in self.food_zones],
+                k=1,
+            )[0]
+
+            cells = self._empty_cells_in_zone(zone)
+            if not cells:
+                continue
+
+            x, y = random.choice(cells)
             self.grid.place(x, y, Food())
+            placed += 1
 
     def step(self) -> None:
         self.tick += 1
