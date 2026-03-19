@@ -11,9 +11,11 @@ FOOD_COLOR = (80, 200, 120)
 AGENT_COLOR = (120, 180, 255)
 TEXT_COLOR = (220, 220, 230)
 HUD_BG = (28, 28, 36)
+GRAPH_COLOR = (100, 220, 140)
+GRAPH_BORDER = (90, 90, 110)
 
 CELL_SIZE = 40
-HUD_HEIGHT = 120
+HUD_HEIGHT = 170
 PADDING = 8
 
 
@@ -27,6 +29,7 @@ class PygameRenderer:
         pygame.display.set_caption("SimulAI")
 
         self.font = pygame.font.SysFont("consolas", 16)
+        self.small_font = pygame.font.SysFont("consolas", 14)
         self.clock = pygame.time.Clock()
 
     def render(self, world, fps: int = 5) -> None:
@@ -98,6 +101,35 @@ class PygameRenderer:
 
         self.screen.blit(text, (x + 4, y + 4))
 
+    def _draw_population_graph(
+        self,
+        history: list[int],
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+    ) -> None:
+        border_rect = pygame.Rect(x, y, width, height)
+        pygame.draw.rect(self.screen, GRAPH_BORDER, border_rect, 1)
+
+        if len(history) < 2:
+            return
+
+        max_pop = max(history)
+        min_pop = min(history)
+
+        if max_pop == min_pop:
+            max_pop += 1
+
+        points: list[tuple[int, int]] = []
+        for i, value in enumerate(history):
+            px = x + int((i / max(1, len(history) - 1)) * (width - 1))
+            py = y + height - 1 - int(((value - min_pop) / (max_pop - min_pop)) * (height - 1))
+            points.append((px, py))
+
+        if len(points) >= 2:
+            pygame.draw.lines(self.screen, GRAPH_COLOR, False, points, 2)
+
     def _draw_hud(self, world) -> None:
         top = world.grid.height * CELL_SIZE
 
@@ -109,14 +141,45 @@ class PygameRenderer:
         )
         pygame.draw.rect(self.screen, HUD_BG, hud_rect)
 
+        stats = world.get_dashboard_stats()
+
         summary = world.summary()
         summary_surf = self.font.render(summary, True, TEXT_COLOR)
         self.screen.blit(summary_surf, (PADDING, top + PADDING))
 
         log = world._last_log or ""
         log_surf = self.font.render(log, True, TEXT_COLOR)
-        self.screen.blit(log_surf, (PADDING, top + 30))
+        self.screen.blit(log_surf, (PADDING, top + 28))
 
-        stats = f"Agents: {len(world.agents)}"
-        stats_surf = self.font.render(stats, True, TEXT_COLOR)
-        self.screen.blit(stats_surf, (PADDING, top + 55))
+        dashboard_lines = [
+            f"Population: {stats['population']}",
+            f"Births: {stats['births']}",
+            f"Deaths: {stats['deaths']}",
+            f"Max Gen: {stats['max_generation']}",
+            f"Ticks: {stats['ticks']}",
+            f"Trend: {stats['trend']}",
+        ]
+
+        left_x = PADDING
+        start_y = top + 55
+        line_gap = 18
+
+        for i, line in enumerate(dashboard_lines):
+            surf = self.small_font.render(line, True, TEXT_COLOR)
+            self.screen.blit(surf, (left_x, start_y + i * line_gap))
+
+        graph_width = 220
+        graph_height = 70
+        graph_x = world.grid.width * CELL_SIZE - graph_width - PADDING
+        graph_y = top + 55
+
+        title_surf = self.small_font.render("Population Trend", True, TEXT_COLOR)
+        self.screen.blit(title_surf, (graph_x, graph_y - 18))
+
+        self._draw_population_graph(
+            stats["population_history"],
+            x=graph_x,
+            y=graph_y,
+            width=graph_width,
+            height=graph_height,
+        )

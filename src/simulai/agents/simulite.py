@@ -187,6 +187,7 @@ class Simulite(Agent):
         child.mood = 0.5
 
         world.add_agent(child)
+        world.record_birth(child)
 
         self.energy -= 5
         self.mood = max(-5, self.mood - 0.3)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import List
+from typing import Any, List
 
 from simulai.environment.resources import Food
 
@@ -31,7 +31,7 @@ class Weather:
 class World:
     def __init__(self, grid):
         self.grid = grid
-        self.agents: List = []
+        self.agents: List[Any] = []
         self.tick = 0
 
         self.weather = Weather()
@@ -47,6 +47,12 @@ class World:
         self._next_agent_id = 1
 
         self.food_zones = self._build_food_zones()
+
+        # Ecosystem dashboard metrics
+        self.total_births = 0
+        self.total_deaths = 0
+        self.max_generation = 0
+        self.population_history: list[int] = []
 
     def _build_food_zones(self) -> list[dict]:
         width = self.grid.width
@@ -91,7 +97,55 @@ class World:
         self.agents.append(agent)
         self.grid.place(agent.x, agent.y, agent)
 
+        # Keep max generation current for any agent added to the world,
+        # including initial population or loaded states.
+        self.max_generation = max(self.max_generation, getattr(agent, "generation", 0))
+
+    def record_birth(self, agent) -> None:
+        self.total_births += 1
+        self.max_generation = max(self.max_generation, getattr(agent, "generation", 0))
+
+    def record_death(self, count: int = 1) -> None:
+        self.total_deaths += count
+
+    def record_population(self) -> None:
+        self.population_history.append(len(self.agents))
+        if len(self.population_history) > 200:
+            self.population_history.pop(0)
+
+    def get_population_trend(self) -> str:
+        if len(self.population_history) < 2:
+            return "→"
+
+        recent = self.population_history[-1]
+        older_index = max(0, len(self.population_history) - 10)
+        older = self.population_history[older_index]
+
+        if recent > older:
+            return "↑"
+        if recent < older:
+            return "↓"
+        return "→"
+
+    def get_dashboard_stats(self) -> dict:
+        return {
+            "population": len(self.agents),
+            "births": self.total_births,
+            "deaths": self.total_deaths,
+            "max_generation": self.max_generation,
+            "ticks": self.tick,
+            "trend": self.get_population_trend(),
+            "population_history": self.population_history.copy(),
+            "weather_kind": self.weather.kind,
+            "weather_icon": self.weather.icon,
+            "weather_duration": self.weather.duration,
+        }
+
     def remove_dead_agents(self) -> None:
+        dead_agents = [agent for agent in self.agents if not getattr(agent, "alive", True)]
+        if dead_agents:
+            self.record_death(len(dead_agents))
+
         self.agents = [agent for agent in self.agents if getattr(agent, "alive", True)]
 
     def _empty_cells_in_zone(self, zone: dict) -> list[tuple[int, int]]:
@@ -193,6 +247,8 @@ class World:
         if self.tick % self.food_regrow_interval == 0:
             self.sprinkle_food(self.food_regrow_amount)
             self._last_log = "New food sprouted."
+
+        self.record_population()
 
     def summary(self) -> str:
         return (
