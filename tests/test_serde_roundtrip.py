@@ -16,6 +16,7 @@ def build_small_world():
     w.add_agent(a)
     w.add_agent(b)
     w.sprinkle_food(count=2)
+
     # seed memory & affinity
     a.memory.last_food = (2, 1)
     a.memory.friend_affinity = {"B": 1.4}
@@ -35,9 +36,11 @@ def test_world_to_from_dict_roundtrip():
     names = sorted([ag.name for ag in w2.agents])
     assert "A" in names and "B" in names
 
+    a_original = next(ag for ag in w.agents if ag.name == "A")
     a2 = next(ag for ag in w2.agents if ag.name == "A")
-    assert a2.memory.last_food == (2, 1)
-    assert a2.memory.friend_affinity.get("B", 0) > 1.3
+
+    assert a2.memory.last_food == a_original.memory.last_food
+    assert a2.memory.friend_affinity == a_original.memory.friend_affinity
 
 
 def test_save_load_json_tmpfile():
