@@ -161,7 +161,6 @@ class PygameRenderer:
 
             text_surface = self.small_font.render(name, True, ZONE_TEXT_COLOR)
             rect = text_surface.get_rect(center=(px, py))
-
             self.screen.blit(text_surface, rect)
 
     def _draw_food(self, x: int, y: int):
@@ -295,6 +294,7 @@ class PygameRenderer:
 
     def _draw_footer(self, world):
         footer_y = self.margin + world.grid.height * self.cell_size + 28
+        population = len(getattr(world, "agents", []))
 
         tick_text = self.font.render(
             f"Tick: {world.tick}",
@@ -310,6 +310,13 @@ class PygameRenderer:
             (230, 230, 230),
         )
         self.screen.blit(weather_text, (self.margin + 150, footer_y))
+
+        population_text = self.font.render(
+            f"Population: {population}",
+            True,
+            (230, 230, 230),
+        )
+        self.screen.blit(population_text, (self.margin + 350, footer_y))
 
         hint_surface = self.tiny_font.render(
             "ESC to close viewer",
