@@ -34,7 +34,15 @@ NEGATIVE_QUIPS = [
 class Simulite(Agent):
     """A tiny AI creature with simple needs, personality, memory, goals, and a dash of attitude."""
 
-    def __init__(self, name: str, x: int, y: int, traits: Optional[Traits] = None):
+    def __init__(
+        self,
+        name: str,
+        x: int,
+        y: int,
+        traits: Optional[Traits] = None,
+        generation: int = 0,
+        parent_name: Optional[str] = None,
+    ):
         super().__init__(name, x, y)
         self.energy = 10
         self.mood = 0.0
@@ -45,8 +53,13 @@ class Simulite(Agent):
 
         self.goal: Optional[Goal] = None
         self._goal_cooldown = 0
-
         self._reproduction_cooldown = 0
+
+        self.generation = generation
+        self.parent_name = parent_name
+
+        self.alive = True
+        self.age = 0
 
     def neighbors(self, world) -> list[Tuple[int, int]]:
         out: list[Tuple[int, int]] = []
@@ -159,8 +172,16 @@ class Simulite(Agent):
             return False
 
         nx, ny = random.choice(empty)
-        child_name = world.next_agent_name(self.name)
-        child = Simulite(child_name, nx, ny, traits=self._mutated_traits())
+        child_name = f"{self.name}-{random.randint(1, 999)}"
+
+        child = Simulite(
+            name=child_name,
+            x=nx,
+            y=ny,
+            traits=self._mutated_traits(),
+            generation=self.generation + 1,
+            parent_name=self.name,
+        )
 
         child.energy = 8
         child.mood = 0.5
@@ -171,7 +192,9 @@ class Simulite(Agent):
         self.mood = max(-5, self.mood - 0.3)
         self._reproduction_cooldown = 10
 
-        world._last_log = f"{self.name} reproduces and spawns {child.name}."
+        world._last_log = (
+            f"{self.name} (Gen {self.generation}) spawns {child.name} (Gen {child.generation})"
+        )
         world._last_mood = self.mood
         self._recent_event = "social_pos"
         self._update_emotion(world)
@@ -220,13 +243,27 @@ class Simulite(Agent):
             self._goal_cooldown = 2
         return acted
 
+    def die(self, world, reason: str = "starvation") -> None:
+        self.alive = False
+        world.grid.clear(self.x, self.y)
+        world._last_log = f"{self.name} dies from {reason}."
+        world._last_mood = self.mood
+
     def tick(self, world):
+        if not self.alive:
+            return
+
+        self.age += 1
         self.memory.decay()
         self._recent_event = None
         self.energy -= 1
 
         if self._reproduction_cooldown > 0:
             self._reproduction_cooldown -= 1
+
+        if self.energy <= -3:
+            self.die(world, reason="starvation")
+            return
 
         if self.energy <= 0:
             self.energy = 6
@@ -259,9 +296,7 @@ class Simulite(Agent):
                 world.grid.move(self.x, self.y, nx, ny)
                 self.x, self.y = nx, ny
                 self.mood = min(5, self.mood + 0.2)
-                world._last_log = (
-                    f"{self.name} heads toward remembered food at " f"{remembered_food}."
-                )
+                world._last_log = f"{self.name} heads toward remembered food at {remembered_food}."
                 world._last_mood = self.mood
                 self._update_emotion(world)
                 return
@@ -282,7 +317,7 @@ class Simulite(Agent):
 
         if self.traits.sociability >= 7:
             for other in world.agents:
-                if other is self:
+                if other is self or not getattr(other, "alive", True):
                     continue
 
                 dist = abs(self.x - other.x) + abs(self.y - other.y)
@@ -312,7 +347,7 @@ class Simulite(Agent):
                         self.x, self.y = nx, ny
                         self.mood = max(-5, self.mood - 0.1)
                         world._last_log = (
-                            f"{self.name} avoids {friend.name} " f"(affinity {affinity:+.1f})."
+                            f"{self.name} avoids {friend.name} (affinity {affinity:+.1f})."
                         )
                         world._last_mood = self.mood
                         self._update_emotion(world)

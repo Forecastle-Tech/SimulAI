@@ -91,6 +91,9 @@ class World:
         self.agents.append(agent)
         self.grid.place(agent.x, agent.y, agent)
 
+    def remove_dead_agents(self) -> None:
+        self.agents = [agent for agent in self.agents if getattr(agent, "alive", True)]
+
     def _empty_cells_in_zone(self, zone: dict) -> list[tuple[int, int]]:
         cells = []
 
@@ -184,6 +187,8 @@ class World:
 
         for agent in list(self.agents):
             agent.tick(self)
+
+        self.remove_dead_agents()
 
         if self.tick % self.food_regrow_interval == 0:
             self.sprinkle_food(self.food_regrow_amount)
