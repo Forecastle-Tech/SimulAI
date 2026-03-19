@@ -43,6 +43,8 @@ class World:
 
         self.food_regrow_interval = 12
         self.food_regrow_amount = 2
+        self.max_agents = 20
+        self._next_agent_id = 1
 
         self.food_zones = self._build_food_zones()
 
@@ -79,6 +81,11 @@ class World:
                 "patch_size": (1, 2),
             },
         ]
+
+    def next_agent_name(self, parent_name: str = "Sim") -> str:
+        name = f"{parent_name}-{self._next_agent_id}"
+        self._next_agent_id += 1
+        return name
 
     def add_agent(self, agent) -> None:
         self.agents.append(agent)

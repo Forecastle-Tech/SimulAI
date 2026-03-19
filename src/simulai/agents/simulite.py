@@ -46,11 +46,20 @@ class Simulite(Agent):
         self.goal: Optional[Goal] = None
         self._goal_cooldown = 0
 
+        self._reproduction_cooldown = 0
+
     def neighbors(self, world) -> list[Tuple[int, int]]:
         out: list[Tuple[int, int]] = []
         for dx, dy in DIRECTIONS:
             nx, ny = self.x + dx, self.y + dy
             if world.grid.in_bounds(nx, ny):
+                out.append((nx, ny))
+        return out
+
+    def empty_neighbors(self, world) -> list[Tuple[int, int]]:
+        out: list[Tuple[int, int]] = []
+        for nx, ny in self.neighbors(world):
+            if world.grid.get(nx, ny) is None:
                 out.append((nx, ny))
         return out
 
@@ -126,6 +135,48 @@ class Simulite(Agent):
                 best_name = name
         return best_name
 
+    def _mutated_traits(self) -> Traits:
+        def clamp(v: int) -> int:
+            return max(1, min(10, v))
+
+        return Traits(
+            curiosity=clamp(self.traits.curiosity + random.choice([-1, 0, 1])),
+            sociability=clamp(self.traits.sociability + random.choice([-1, 0, 1])),
+        )
+
+    def try_reproduce(self, world) -> bool:
+        if self._reproduction_cooldown > 0:
+            return False
+
+        if self.energy < 13 or self.mood < 1.5:
+            return False
+
+        if len(world.agents) >= world.max_agents:
+            return False
+
+        empty = self.empty_neighbors(world)
+        if not empty:
+            return False
+
+        nx, ny = random.choice(empty)
+        child_name = world.next_agent_name(self.name)
+        child = Simulite(child_name, nx, ny, traits=self._mutated_traits())
+
+        child.energy = 8
+        child.mood = 0.5
+
+        world.add_agent(child)
+
+        self.energy -= 5
+        self.mood = max(-5, self.mood - 0.3)
+        self._reproduction_cooldown = 10
+
+        world._last_log = f"{self.name} reproduces and spawns {child.name}."
+        world._last_mood = self.mood
+        self._recent_event = "social_pos"
+        self._update_emotion(world)
+        return True
+
     def consider_goals(self, world):
         if self._goal_cooldown > 0:
             self._goal_cooldown -= 1
@@ -174,6 +225,9 @@ class Simulite(Agent):
         self._recent_event = None
         self.energy -= 1
 
+        if self._reproduction_cooldown > 0:
+            self._reproduction_cooldown -= 1
+
         if self.energy <= 0:
             self.energy = 6
             self.mood = max(-5, self.mood - 1)
@@ -184,12 +238,20 @@ class Simulite(Agent):
             self._update_emotion(world)
             return
 
+        if self.try_reproduce(world):
+            return
+
         self.consider_goals(world)
         if self.act_on_goal(world):
             self._update_emotion(world)
             return
 
         remembered_food = self.memory.best_food_location((self.x, self.y))
+        if self.traits.curiosity <= 2 and remembered_food:
+            dist = abs(self.x - remembered_food[0]) + abs(self.y - remembered_food[1])
+            if dist > 4:
+                remembered_food = None
+
         if self.energy <= 6 and remembered_food:
             step = self.choose_step_towards(world, remembered_food)
             if step:
@@ -217,6 +279,22 @@ class Simulite(Agent):
             world._last_mood = self.mood
             self._update_emotion(world)
             return
+
+        if self.traits.sociability >= 7:
+            for other in world.agents:
+                if other is self:
+                    continue
+
+                dist = abs(self.x - other.x) + abs(self.y - other.y)
+                if dist <= 4:
+                    step = self.choose_step_towards(world, (other.x, other.y))
+                    if step:
+                        nx, ny = step
+                        world.grid.move(self.x, self.y, nx, ny)
+                        self.x, self.y = nx, ny
+                        world._last_log = f"{self.name} moves toward {other.name}."
+                        self._update_emotion(world)
+                        return
 
         friend_loc = self.find_adjacent_friend(world)
         if friend_loc:
@@ -266,7 +344,7 @@ class Simulite(Agent):
                     self._update_emotion(world)
                     return
 
-        attempts = 1 + (self.traits.curiosity // 4)
+        attempts = 1 + (self.traits.curiosity // 3)
         for _ in range(attempts):
             dx, dy = random.choice(DIRECTIONS)
             nx, ny = self.x + dx, self.y + dy
