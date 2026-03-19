@@ -206,6 +206,11 @@ class PygameRenderer:
         pygame.draw.rect(self.screen, HUD_BG_COLOR, hud_rect, border_radius=8)
 
         name_surface = self.tiny_font.render(agent.name, True, HUD_TEXT_COLOR)
+        gen_surface = self.tiny_font.render(
+            f"G:{agent.generation}",
+            True,
+            HUD_TEXT_COLOR,
+        )
         energy_surface = self.tiny_font.render(
             f"E:{agent.energy}",
             True,
@@ -228,6 +233,7 @@ class PygameRenderer:
         )
 
         self.screen.blit(name_surface, (hud_x + 6, hud_y + 4))
+        self.screen.blit(gen_surface, (hud_x + 48, hud_y + 4))
         self.screen.blit(energy_surface, (hud_x + 6, hud_y + 18))
         self.screen.blit(mood_surface, (hud_x + 48, hud_y + 18))
         self.screen.blit(food_surface, (hud_x + 6, hud_y + 32))
