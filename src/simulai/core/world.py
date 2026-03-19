@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any
 
 from simulai.environment.resources import Food
+from simulai.io.metrics import MetricsExporter
 
 
 @dataclass
@@ -31,7 +32,7 @@ class Weather:
 class World:
     def __init__(self, grid):
         self.grid = grid
-        self.agents: List[Any] = []
+        self.agents: list[Any] = []
         self.tick = 0
 
         self.weather = Weather()
@@ -53,6 +54,9 @@ class World:
         self.total_deaths = 0
         self.max_generation = 0
         self.population_history: list[int] = []
+
+        # CSV metrics export
+        self.metrics_exporter = MetricsExporter()
 
     def _build_food_zones(self) -> list[dict]:
         width = self.grid.width
@@ -96,9 +100,6 @@ class World:
     def add_agent(self, agent) -> None:
         self.agents.append(agent)
         self.grid.place(agent.x, agent.y, agent)
-
-        # Keep max generation current for any agent added to the world,
-        # including initial population or loaded states.
         self.max_generation = max(self.max_generation, getattr(agent, "generation", 0))
 
     def record_birth(self, agent) -> None:
@@ -149,7 +150,7 @@ class World:
         self.agents = [agent for agent in self.agents if getattr(agent, "alive", True)]
 
     def _empty_cells_in_zone(self, zone: dict) -> list[tuple[int, int]]:
-        cells = []
+        cells: list[tuple[int, int]] = []
 
         for y in range(zone["y1"], zone["y2"] + 1):
             for x in range(zone["x1"], zone["x2"] + 1):
@@ -249,6 +250,9 @@ class World:
             self._last_log = "New food sprouted."
 
         self.record_population()
+
+        if self.metrics_exporter is not None:
+            self.metrics_exporter.record(self)
 
     def summary(self) -> str:
         return (
