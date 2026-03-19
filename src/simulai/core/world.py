@@ -44,7 +44,6 @@ class World:
         self.food_regrow_interval = 12
         self.food_regrow_amount = 2
 
-        # Ecosystem zones
         self.food_zones = self._build_food_zones()
 
     def _build_food_zones(self) -> list[dict]:
@@ -59,6 +58,7 @@ class World:
                 "x2": max(1, width // 3),
                 "y2": height - 1,
                 "weight": 0.6,
+                "patch_size": (3, 5),
             },
             {
                 "name": "plains",
@@ -67,6 +67,7 @@ class World:
                 "x2": max(2, (2 * width) // 3),
                 "y2": height - 1,
                 "weight": 0.3,
+                "patch_size": (2, 3),
             },
             {
                 "name": "desert",
@@ -75,6 +76,7 @@ class World:
                 "x2": width - 1,
                 "y2": height - 1,
                 "weight": 0.1,
+                "patch_size": (1, 2),
             },
         ]
 
@@ -92,29 +94,78 @@ class World:
 
         return cells
 
+    def _place_food_if_empty(self, x: int, y: int) -> bool:
+        if not self.grid.in_bounds(x, y):
+            return False
+        if self.grid.get(x, y) is not None:
+            return False
+
+        self.grid.place(x, y, Food())
+        return True
+
+    def _spawn_food_patch(self, zone: dict, patch_cells: int) -> int:
+        empty_cells = self._empty_cells_in_zone(zone)
+        if not empty_cells:
+            return 0
+
+        seed_x, seed_y = random.choice(empty_cells)
+        placed = 0
+
+        if self._place_food_if_empty(seed_x, seed_y):
+            placed += 1
+
+        candidates = [
+            (seed_x + 1, seed_y),
+            (seed_x - 1, seed_y),
+            (seed_x, seed_y + 1),
+            (seed_x, seed_y - 1),
+            (seed_x + 1, seed_y + 1),
+            (seed_x - 1, seed_y - 1),
+            (seed_x + 1, seed_y - 1),
+            (seed_x - 1, seed_y + 1),
+        ]
+        random.shuffle(candidates)
+
+        for x, y in candidates:
+            if placed >= patch_cells:
+                break
+            if (
+                zone["x1"] <= x <= zone["x2"]
+                and zone["y1"] <= y <= zone["y2"]
+                and self._place_food_if_empty(x, y)
+            ):
+                placed += 1
+
+        return placed
+
     def sprinkle_food(self, count: int = 3) -> None:
         if count <= 0:
             return
 
-        placed = 0
-        max_attempts = count * 10
+        placed_total = 0
+        max_attempts = count * 6
         attempts = 0
 
-        while placed < count and attempts < max_attempts:
+        while placed_total < count and attempts < max_attempts:
             attempts += 1
+
             zone = random.choices(
                 self.food_zones,
                 weights=[z["weight"] for z in self.food_zones],
                 k=1,
             )[0]
 
-            cells = self._empty_cells_in_zone(zone)
-            if not cells:
+            min_patch, max_patch = zone["patch_size"]
+            patch_cells = random.randint(min_patch, max_patch)
+
+            remaining = count - placed_total
+            patch_cells = min(patch_cells, remaining)
+
+            placed = self._spawn_food_patch(zone, patch_cells)
+            if placed == 0:
                 continue
 
-            x, y = random.choice(cells)
-            self.grid.place(x, y, Food())
-            placed += 1
+            placed_total += placed
 
     def step(self) -> None:
         self.tick += 1
