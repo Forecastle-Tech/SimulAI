@@ -8,11 +8,29 @@ from simulai.environment.resources import Food
 BG_COLOR = (18, 18, 24)
 GRID_COLOR = (50, 50, 70)
 FOOD_COLOR = (80, 200, 120)
-AGENT_COLOR = (120, 180, 255)
 TEXT_COLOR = (220, 220, 230)
 HUD_BG = (28, 28, 36)
 GRAPH_COLOR = (100, 220, 140)
 GRAPH_BORDER = (90, 90, 110)
+
+ZONE_COLORS = {
+    "forest": (34, 68, 46),
+    "plains": (92, 86, 52),
+    "desert": (120, 94, 58),
+}
+
+GENERATION_COLORS = [
+    (120, 220, 255),  # Gen 0
+    (120, 255, 180),  # Gen 1
+    (190, 140, 255),  # Gen 2
+    (255, 180, 100),  # Gen 3
+    (255, 120, 180),  # Gen 4
+    (180, 255, 120),  # Gen 5
+]
+
+VISOR_COLOR = (235, 245, 255)
+CORE_COLOR = (255, 255, 255)
+OUTLINE_COLOR = (15, 15, 20)
 
 CELL_SIZE = 40
 HUD_HEIGHT = 170
@@ -37,6 +55,7 @@ class PygameRenderer:
 
         self.screen.fill(BG_COLOR)
 
+        self._draw_zones(world)
         self._draw_grid(world)
         self._draw_entities(world)
         self._draw_hud(world)
@@ -49,6 +68,21 @@ class PygameRenderer:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 raise SystemExit
+
+    def _zone_polygon_to_screen_points(
+        self,
+        polygon: list[tuple[int, int]],
+    ) -> list[tuple[int, int]]:
+        return [
+            (x * CELL_SIZE + CELL_SIZE // 2, y * CELL_SIZE + CELL_SIZE // 2) for x, y in polygon
+        ]
+
+    def _draw_zones(self, world) -> None:
+        for zone in world.food_zones:
+            color = ZONE_COLORS.get(zone["name"], (60, 60, 60))
+            points = self._zone_polygon_to_screen_points(zone["polygon"])
+            if len(points) >= 3:
+                pygame.draw.polygon(self.screen, color, points)
 
     def _draw_grid(self, world) -> None:
         for y in range(world.grid.height):
@@ -68,7 +102,6 @@ class PygameRenderer:
 
                 if isinstance(cell, Food):
                     self._draw_food(x, y)
-
                 elif isinstance(cell, Simulite):
                     self._draw_agent(cell)
 
@@ -83,23 +116,67 @@ class PygameRenderer:
             CELL_SIZE // 6,
         )
 
-    def _draw_agent(self, agent: Simulite) -> None:
-        x = agent.x * CELL_SIZE
-        y = agent.y * CELL_SIZE
-
-        rect = pygame.Rect(
-            x + 6,
-            y + 6,
-            CELL_SIZE - 12,
-            CELL_SIZE - 12,
+        pygame.draw.circle(
+            self.screen,
+            (180, 255, 200),
+            (cx, cy),
+            max(2, CELL_SIZE // 10),
         )
 
-        pygame.draw.rect(self.screen, AGENT_COLOR, rect, border_radius=6)
+    def _generation_color(self, generation: int) -> tuple[int, int, int]:
+        return GENERATION_COLORS[generation % len(GENERATION_COLORS)]
 
-        label = f"{agent.name[:3]} G{agent.generation}"
-        text = self.font.render(label, True, TEXT_COLOR)
+    def _draw_agent(self, agent: Simulite) -> None:
+        color = self._generation_color(agent.generation)
 
-        self.screen.blit(text, (x + 4, y + 4))
+        cx = agent.x * CELL_SIZE + CELL_SIZE // 2
+        cy = agent.y * CELL_SIZE + CELL_SIZE // 2
+
+        # Back glow
+        pygame.draw.circle(self.screen, color, (cx, cy), 12, 1)
+
+        # Head
+        pygame.draw.circle(self.screen, OUTLINE_COLOR, (cx, cy - 10), 6)
+        pygame.draw.circle(self.screen, color, (cx, cy - 10), 5)
+
+        # Visor
+        visor_rect = pygame.Rect(cx - 4, cy - 12, 8, 4)
+        pygame.draw.rect(self.screen, VISOR_COLOR, visor_rect, border_radius=2)
+
+        # Torso
+        torso_points = [
+            (cx, cy - 4),
+            (cx + 6, cy + 6),
+            (cx, cy + 14),
+            (cx - 6, cy + 6),
+        ]
+        pygame.draw.polygon(self.screen, OUTLINE_COLOR, torso_points)
+
+        inner_torso_points = [
+            (cx, cy - 3),
+            (cx + 5, cy + 6),
+            (cx, cy + 13),
+            (cx - 5, cy + 6),
+        ]
+        pygame.draw.polygon(self.screen, color, inner_torso_points)
+
+        # Core light
+        pygame.draw.circle(self.screen, CORE_COLOR, (cx, cy + 5), 2)
+
+        # Arms
+        pygame.draw.line(self.screen, color, (cx - 3, cy + 2), (cx - 9, cy + 7), 2)
+        pygame.draw.line(self.screen, color, (cx + 3, cy + 2), (cx + 9, cy + 7), 2)
+
+        # Legs
+        pygame.draw.line(self.screen, color, (cx - 2, cy + 13), (cx - 7, cy + 20), 2)
+        pygame.draw.line(self.screen, color, (cx + 2, cy + 13), (cx + 7, cy + 20), 2)
+
+        # Small shoulder accents
+        pygame.draw.circle(self.screen, VISOR_COLOR, (cx - 5, cy + 1), 1)
+        pygame.draw.circle(self.screen, VISOR_COLOR, (cx + 5, cy + 1), 1)
+
+        label = self.small_font.render(f"G{agent.generation}", True, TEXT_COLOR)
+        self.screen.blit(label, (cx - 10, cy + 21))
 
     def _draw_population_graph(
         self,

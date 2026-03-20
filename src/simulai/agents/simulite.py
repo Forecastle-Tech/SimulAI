@@ -161,7 +161,7 @@ class Simulite(Agent):
         if self._reproduction_cooldown > 0:
             return False
 
-        if self.energy < 13 or self.mood < 1.5:
+        if self.energy < 10 or self.mood < 1.0:
             return False
 
         if len(world.agents) >= world.max_agents:
@@ -189,7 +189,7 @@ class Simulite(Agent):
         world.add_agent(child)
         world.record_birth(child)
 
-        self.energy -= 5
+        self.energy -= 7
         self.mood = max(-5, self.mood - 0.3)
         self._reproduction_cooldown = 10
 
@@ -257,7 +257,7 @@ class Simulite(Agent):
         self.age += 1
         self.memory.decay()
         self._recent_event = None
-        self.energy -= 1
+        self.energy -= 2
 
         if self._reproduction_cooldown > 0:
             self._reproduction_cooldown -= 1

@@ -43,7 +43,7 @@ class World:
         self._last_goal = ""
 
         self.food_regrow_interval = 12
-        self.food_regrow_amount = 2
+        self.food_regrow_amount = 1
         self.max_agents = 20
         self._next_agent_id = 1
 
@@ -59,36 +59,63 @@ class World:
         self.metrics_exporter = MetricsExporter()
 
     def _build_food_zones(self) -> list[dict]:
+        """
+        Build three non-intersecting polygon biomes across the grid.
+
+        The polygons share borders but are intended not to overlap.
+        Coordinates are grid-cell coordinates, not pixel coordinates.
+        """
         width = self.grid.width
         height = self.grid.height
+
+        mid_x = width // 2
+        left_x = max(1, width // 3)
+        right_x = min(width - 1, (2 * width) // 3)
+
+        top_y = 0
+        bottom_y = height - 1
+        upper_mid_y = max(1, height // 3)
+        lower_mid_y = max(2, (2 * height) // 3)
 
         return [
             {
                 "name": "forest",
-                "x1": 0,
-                "y1": 0,
-                "x2": max(1, width // 3),
-                "y2": height - 1,
-                "weight": 0.6,
+                "weight": 0.55,
                 "patch_size": (3, 5),
+                "polygon": [
+                    (0, top_y),
+                    (left_x, top_y),
+                    (mid_x - 1, upper_mid_y),
+                    (left_x, lower_mid_y),
+                    (0, bottom_y),
+                ],
             },
             {
                 "name": "plains",
-                "x1": max(1, width // 3),
-                "y1": 0,
-                "x2": max(2, (2 * width) // 3),
-                "y2": height - 1,
-                "weight": 0.3,
+                "weight": 0.30,
                 "patch_size": (2, 3),
+                "polygon": [
+                    (left_x, top_y),
+                    (right_x, top_y),
+                    (right_x + 1, upper_mid_y),
+                    (right_x, lower_mid_y),
+                    (left_x, bottom_y),
+                    (mid_x - 1, lower_mid_y),
+                    (mid_x - 1, upper_mid_y),
+                ],
             },
             {
                 "name": "desert",
-                "x1": max(2, (2 * width) // 3),
-                "y1": 0,
-                "x2": width - 1,
-                "y2": height - 1,
-                "weight": 0.1,
+                "weight": 0.15,
                 "patch_size": (1, 2),
+                "polygon": [
+                    (right_x, top_y),
+                    (width - 1, top_y),
+                    (width - 1, bottom_y),
+                    (right_x, bottom_y),
+                    (right_x + 1, lower_mid_y),
+                    (right_x + 1, upper_mid_y),
+                ],
             },
         ]
 
@@ -149,12 +176,40 @@ class World:
 
         self.agents = [agent for agent in self.agents if getattr(agent, "alive", True)]
 
+    def _point_in_polygon(self, x: int, y: int, polygon: list[tuple[int, int]]) -> bool:
+        """
+        Ray-casting point-in-polygon test using cell-center coordinates.
+        """
+        px = x + 0.5
+        py = y + 0.5
+
+        inside = False
+        j = len(polygon) - 1
+
+        for i in range(len(polygon)):
+            xi, yi = polygon[i]
+            xj, yj = polygon[j]
+
+            intersects = ((yi > py) != (yj > py)) and (
+                px < (xj - xi) * (py - yi) / ((yj - yi) or 1e-9) + xi
+            )
+            if intersects:
+                inside = not inside
+
+            j = i
+
+        return inside
+
     def _empty_cells_in_zone(self, zone: dict) -> list[tuple[int, int]]:
         cells: list[tuple[int, int]] = []
 
-        for y in range(zone["y1"], zone["y2"] + 1):
-            for x in range(zone["x1"], zone["x2"] + 1):
-                if self.grid.in_bounds(x, y) and self.grid.get(x, y) is None:
+        for y in range(self.grid.height):
+            for x in range(self.grid.width):
+                if not self.grid.in_bounds(x, y):
+                    continue
+                if self.grid.get(x, y) is not None:
+                    continue
+                if self._point_in_polygon(x, y, zone["polygon"]):
                     cells.append((x, y))
 
         return cells
@@ -194,12 +249,9 @@ class World:
         for x, y in candidates:
             if placed >= patch_cells:
                 break
-            if (
-                zone["x1"] <= x <= zone["x2"]
-                and zone["y1"] <= y <= zone["y2"]
-                and self._place_food_if_empty(x, y)
-            ):
-                placed += 1
+            if self.grid.in_bounds(x, y) and self._point_in_polygon(x, y, zone["polygon"]):
+                if self._place_food_if_empty(x, y):
+                    placed += 1
 
         return placed
 
@@ -208,7 +260,7 @@ class World:
             return
 
         placed_total = 0
-        max_attempts = count * 6
+        max_attempts = count * 8
         attempts = 0
 
         while placed_total < count and attempts < max_attempts:
@@ -222,9 +274,7 @@ class World:
 
             min_patch, max_patch = zone["patch_size"]
             patch_cells = random.randint(min_patch, max_patch)
-
-            remaining = count - placed_total
-            patch_cells = min(patch_cells, remaining)
+            patch_cells = min(patch_cells, count - placed_total)
 
             placed = self._spawn_food_patch(zone, patch_cells)
             if placed == 0:
