@@ -3,7 +3,6 @@ from __future__ import annotations
 import pygame
 
 from simulai.agents.simulite import Simulite
-from simulai.environment.resources import Food
 
 BG_COLOR = (18, 18, 24)
 GRID_COLOR = (50, 50, 70)
@@ -16,16 +15,25 @@ GRAPH_BORDER = (90, 90, 110)
 ZONE_COLORS = {
     "forest": (34, 68, 46),
     "plains": (92, 86, 52),
-    "desert": (120, 94, 58),
+    "village": (70, 90, 120),
+    "drylands": (120, 94, 58),
+}
+
+CHIP_COLORS = {
+    "good_deed": (120, 220, 255),
+    "health": (255, 120, 120),
+    "exercise": (255, 220, 100),
+    "reproduction": (220, 120, 255),
+    "bad": (180, 60, 60),
 }
 
 GENERATION_COLORS = [
-    (120, 220, 255),  # Gen 0
-    (120, 255, 180),  # Gen 1
-    (190, 140, 255),  # Gen 2
-    (255, 180, 100),  # Gen 3
-    (255, 120, 180),  # Gen 4
-    (180, 255, 120),  # Gen 5
+    (120, 220, 255),
+    (120, 255, 180),
+    (190, 140, 255),
+    (255, 180, 100),
+    (255, 120, 180),
+    (180, 255, 120),
 ]
 
 VISOR_COLOR = (235, 245, 255)
@@ -57,7 +65,9 @@ class PygameRenderer:
 
         self._draw_zones(world)
         self._draw_grid(world)
-        self._draw_entities(world)
+        self._draw_food(world)
+        self._draw_chips(world)
+        self._draw_agents(world)
         self._draw_hud(world)
 
         pygame.display.flip()
@@ -69,59 +79,53 @@ class PygameRenderer:
                 pygame.quit()
                 raise SystemExit
 
-    def _zone_polygon_to_screen_points(
-        self,
-        polygon: list[tuple[int, int]],
-    ) -> list[tuple[int, int]]:
-        return [
-            (x * CELL_SIZE + CELL_SIZE // 2, y * CELL_SIZE + CELL_SIZE // 2) for x, y in polygon
-        ]
-
     def _draw_zones(self, world) -> None:
-        for zone in world.food_zones:
-            color = ZONE_COLORS.get(zone["name"], (60, 60, 60))
-            points = self._zone_polygon_to_screen_points(zone["polygon"])
-            if len(points) >= 3:
-                pygame.draw.polygon(self.screen, color, points)
+        for y in range(world.grid.height):
+            for x in range(world.grid.width):
+                zone_name = world.grid.get_zone(x, y)
+                color = ZONE_COLORS.get(zone_name, (60, 60, 60))
+                rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                pygame.draw.rect(self.screen, color, rect)
 
     def _draw_grid(self, world) -> None:
         for y in range(world.grid.height):
             for x in range(world.grid.width):
-                rect = pygame.Rect(
-                    x * CELL_SIZE,
-                    y * CELL_SIZE,
-                    CELL_SIZE,
-                    CELL_SIZE,
-                )
+                rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                 pygame.draw.rect(self.screen, GRID_COLOR, rect, 1)
 
-    def _draw_entities(self, world) -> None:
-        for y in range(world.grid.height):
-            for x in range(world.grid.width):
-                cell = world.grid.get(x, y)
+    def _draw_food(self, world) -> None:
+        for x, y in world.food:
+            cx = x * CELL_SIZE + CELL_SIZE // 2
+            cy = y * CELL_SIZE + CELL_SIZE // 2
 
-                if isinstance(cell, Food):
-                    self._draw_food(x, y)
-                elif isinstance(cell, Simulite):
-                    self._draw_agent(cell)
+            pygame.draw.circle(self.screen, FOOD_COLOR, (cx, cy), CELL_SIZE // 6)
+            pygame.draw.circle(self.screen, (180, 255, 200), (cx, cy), max(2, CELL_SIZE // 10))
 
-    def _draw_food(self, x: int, y: int) -> None:
-        cx = x * CELL_SIZE + CELL_SIZE // 2
-        cy = y * CELL_SIZE + CELL_SIZE // 2
+    def _draw_chips(self, world) -> None:
+        for (x, y), chip_type in world.chips.items():
+            color = CHIP_COLORS.get(chip_type, (200, 200, 200))
+            cx = x * CELL_SIZE + CELL_SIZE // 2
+            cy = y * CELL_SIZE + CELL_SIZE // 2
 
-        pygame.draw.circle(
-            self.screen,
-            FOOD_COLOR,
-            (cx, cy),
-            CELL_SIZE // 6,
-        )
+            points = [
+                (cx, cy - 8),
+                (cx + 8, cy),
+                (cx, cy + 8),
+                (cx - 8, cy),
+            ]
+            pygame.draw.polygon(self.screen, OUTLINE_COLOR, points)
+            inner = [
+                (cx, cy - 6),
+                (cx + 6, cy),
+                (cx, cy + 6),
+                (cx - 6, cy),
+            ]
+            pygame.draw.polygon(self.screen, color, inner)
 
-        pygame.draw.circle(
-            self.screen,
-            (180, 255, 200),
-            (cx, cy),
-            max(2, CELL_SIZE // 10),
-        )
+    def _draw_agents(self, world) -> None:
+        for agent in world.agents:
+            if getattr(agent, "alive", True):
+                self._draw_agent(agent)
 
     def _generation_color(self, generation: int) -> tuple[int, int, int]:
         return GENERATION_COLORS[generation % len(GENERATION_COLORS)]
@@ -132,18 +136,14 @@ class PygameRenderer:
         cx = agent.x * CELL_SIZE + CELL_SIZE // 2
         cy = agent.y * CELL_SIZE + CELL_SIZE // 2
 
-        # Back glow
         pygame.draw.circle(self.screen, color, (cx, cy), 12, 1)
 
-        # Head
         pygame.draw.circle(self.screen, OUTLINE_COLOR, (cx, cy - 10), 6)
         pygame.draw.circle(self.screen, color, (cx, cy - 10), 5)
 
-        # Visor
         visor_rect = pygame.Rect(cx - 4, cy - 12, 8, 4)
         pygame.draw.rect(self.screen, VISOR_COLOR, visor_rect, border_radius=2)
 
-        # Torso
         torso_points = [
             (cx, cy - 4),
             (cx + 6, cy + 6),
@@ -160,18 +160,14 @@ class PygameRenderer:
         ]
         pygame.draw.polygon(self.screen, color, inner_torso_points)
 
-        # Core light
         pygame.draw.circle(self.screen, CORE_COLOR, (cx, cy + 5), 2)
 
-        # Arms
         pygame.draw.line(self.screen, color, (cx - 3, cy + 2), (cx - 9, cy + 7), 2)
         pygame.draw.line(self.screen, color, (cx + 3, cy + 2), (cx + 9, cy + 7), 2)
 
-        # Legs
         pygame.draw.line(self.screen, color, (cx - 2, cy + 13), (cx - 7, cy + 20), 2)
         pygame.draw.line(self.screen, color, (cx + 2, cy + 13), (cx + 7, cy + 20), 2)
 
-        # Small shoulder accents
         pygame.draw.circle(self.screen, VISOR_COLOR, (cx - 5, cy + 1), 1)
         pygame.draw.circle(self.screen, VISOR_COLOR, (cx + 5, cy + 1), 1)
 
@@ -180,7 +176,7 @@ class PygameRenderer:
 
     def _draw_population_graph(
         self,
-        history: list[int],
+        history: list[float],
         x: int,
         y: int,
         width: int,
@@ -210,17 +206,12 @@ class PygameRenderer:
     def _draw_hud(self, world) -> None:
         top = world.grid.height * CELL_SIZE
 
-        hud_rect = pygame.Rect(
-            0,
-            top,
-            world.grid.width * CELL_SIZE,
-            HUD_HEIGHT,
-        )
+        hud_rect = pygame.Rect(0, top, world.grid.width * CELL_SIZE, HUD_HEIGHT)
         pygame.draw.rect(self.screen, HUD_BG, hud_rect)
 
         stats = world.get_dashboard_stats()
 
-        summary = world.summary()
+        summary = world.summary().splitlines()[0] if world.summary() else ""
         summary_surf = self.font.render(summary, True, TEXT_COLOR)
         self.screen.blit(summary_surf, (PADDING, top + PADDING))
 
@@ -233,13 +224,15 @@ class PygameRenderer:
             f"Births: {stats['births']}",
             f"Deaths: {stats['deaths']}",
             f"Max Gen: {stats['max_generation']}",
+            f"Food: {stats['food']}",
+            f"Chips: {stats['chip_count']}",
             f"Ticks: {stats['ticks']}",
             f"Trend: {stats['trend']}",
         ]
 
         left_x = PADDING
         start_y = top + 55
-        line_gap = 18
+        line_gap = 16
 
         for i, line in enumerate(dashboard_lines):
             surf = self.small_font.render(line, True, TEXT_COLOR)
