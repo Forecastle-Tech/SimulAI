@@ -2,11 +2,56 @@ from __future__ import annotations
 
 import csv
 import random
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from simulai.agents.simulite import Simulite
 from simulai.agents.traits import Traits
+
+
+@dataclass
+class Weather:
+    state: str = "clear"
+    duration: int = 5
+    progress: int = 0
+
+    @property
+    def kind(self) -> str:
+        return self.state
+
+    @kind.setter
+    def kind(self, value: str) -> None:
+        self.state = value
+
+    def step(self) -> None:
+        self.progress += 1
+        if self.progress > self.duration:
+            self.progress = 1
+            self.state = "rain" if self.state == "clear" else "clear"
+
+
+class MetricsExporter:
+    def __init__(self, output_path: str | Path = "outputs/simulation_metrics.csv") -> None:
+        self.output_path = Path(output_path)
+        self.overwrite: bool = True
+
+    def export(self, rows: list[dict[str, object]]) -> None:
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if not rows:
+            self.output_path.write_text("", encoding="utf-8")
+            return
+
+        fieldnames = list(rows[0].keys())
+        mode = "w" if self.overwrite or not self.output_path.exists() else "a"
+        write_header = mode == "w" or not self.output_path.exists()
+
+        with self.output_path.open(mode, newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if write_header:
+                writer.writeheader()
+            writer.writerows(rows)
 
 
 class World:
@@ -21,8 +66,12 @@ class World:
         self._last_log: str = ""
 
         self.tick_count: int = 0
-        self.metrics_history: list[dict[str, float | int]] = []
+        self.tick: int = 0
+        self.metrics_history: list[dict[str, float | int | str]] = []
         self.deaths_by_cause: dict[str, int] = {}
+
+        self.weather = Weather()
+        self.metrics_exporter = MetricsExporter()
 
         self.next_child_id: int = 1
         self.max_population: int = 24
@@ -104,6 +153,59 @@ class World:
         if added > 0:
             self._last_log = f"Spawned chips: +{added}"
 
+    def _grid_item_at(self, x: int, y: int):
+        if hasattr(self.grid, "get"):
+            try:
+                return self.grid.get(x, y)
+            except Exception:
+                return None
+        return None
+
+    def _clear_grid_item(self, x: int, y: int) -> None:
+        if hasattr(self.grid, "cells"):
+            try:
+                self.grid.cells[y][x] = None
+                return
+            except Exception:
+                pass
+
+        if hasattr(self.grid, "clear"):
+            try:
+                self.grid.clear(x, y)
+                return
+            except Exception:
+                pass
+
+        if hasattr(self.grid, "place"):
+            try:
+                self.grid.place(x, y, None)
+            except Exception:
+                pass
+
+    def _is_food_object(self, item) -> bool:
+        return item is not None and item.__class__.__name__ == "Food"
+
+    def _food_positions(self) -> set[tuple[int, int]]:
+        positions = set(self.food)
+
+        for y in range(self.grid.height):
+            for x in range(self.grid.width):
+                obj = self._grid_item_at(x, y)
+                if self._is_food_object(obj):
+                    positions.add((x, y))
+
+        return positions
+
+    def _nearest_food_position(self, agent) -> tuple[int, int] | None:
+        food_positions = self._food_positions()
+        if not food_positions:
+            return None
+
+        return min(
+            food_positions,
+            key=lambda pos: abs(pos[0] - agent.x) + abs(pos[1] - agent.y),
+        )
+
     def _apply_zone_effects(self, agent) -> None:
         zone = self.get_zone(agent.x, agent.y)
 
@@ -120,16 +222,21 @@ class World:
             agent.risk_load = min(100.0, agent.risk_load + 0.5)
 
     def _feed_agent_if_on_food(self, agent) -> None:
+        if not getattr(agent, "alive", True):
+            return
+
         pos = (agent.x, agent.y)
-        if pos in self.food and getattr(agent, "alive", True):
+        ate = False
+
+        nutrition_gain = 24.0
+        energy_gain = 6.0
+        life_force_gain = 3.0
+        health_gain = 1.5
+        mood_gain = 5.0
+
+        if pos in self.food:
             self.food.remove(pos)
-
             zone = self.get_zone(agent.x, agent.y)
-
-            nutrition_gain = 24.0
-            energy_gain = 6.0
-            life_force_gain = 3.0
-            health_gain = 1.5
 
             if zone == "forest":
                 nutrition_gain += 4.0
@@ -138,12 +245,31 @@ class World:
                 nutrition_gain -= 4.0
                 life_force_gain -= 0.5
 
-            agent.nutrition = min(100.0, agent.nutrition + nutrition_gain)
-            agent.energy = min(100.0, agent.energy + energy_gain)
-            agent.life_force = min(100.0, agent.life_force + life_force_gain)
-            agent.health = min(100.0, agent.health + health_gain)
+            ate = True
 
-            self._last_log = f"{agent.name} found food in {zone}"
+        item = self._grid_item_at(agent.x, agent.y)
+        if self._is_food_object(item):
+            food_energy = float(getattr(item, "energy", 5.0))
+            nutrition_gain = max(nutrition_gain, 12.0 + food_energy)
+            energy_gain = max(energy_gain, food_energy + 8.0)
+            mood_gain = max(mood_gain, 6.0)
+            self._clear_grid_item(agent.x, agent.y)
+            ate = True
+
+        if not ate:
+            return
+
+        agent.nutrition = min(100.0, agent.nutrition + nutrition_gain)
+        agent.energy = min(100.0, agent.energy + energy_gain)
+        agent.life_force = min(100.0, agent.life_force + life_force_gain)
+        agent.health = min(100.0, agent.health + health_gain)
+        agent.mood = min(100.0, agent.mood + mood_gain)
+        agent.emotion = "satisfied"
+        agent.memory.remember_food(agent.x, agent.y)
+        agent.clamp_state()
+
+        zone = self.get_zone(agent.x, agent.y)
+        self._last_log = f"{agent.name} found food in {zone}"
 
     def _apply_chip_effect(self, agent, chip_type: str) -> None:
         if chip_type == "good_deed":
@@ -151,11 +277,13 @@ class World:
             agent.morality = min(100.0, agent.morality + 6.0)
             agent.social = min(100.0, agent.social + 4.0)
             agent.life_force = min(100.0, agent.life_force + 3.0)
+            agent.mood = min(100.0, agent.mood + 2.0)
 
         elif chip_type == "health":
             agent.health = min(100.0, agent.health + 8.0)
             agent.energy = min(100.0, agent.energy + 3.0)
             agent.life_force = min(100.0, agent.life_force + 2.0)
+            agent.mood = min(100.0, agent.mood + 1.5)
 
         elif chip_type == "exercise":
             if agent.nutrition > 10 and agent.energy > 15:
@@ -163,21 +291,25 @@ class World:
                 agent.health = min(100.0, agent.health + 3.0)
                 agent.energy = max(0.0, agent.energy - 1.0)
                 agent.life_force = min(100.0, agent.life_force + 1.5)
+                agent.mood = min(100.0, agent.mood + 1.0)
             else:
                 agent.energy = max(0.0, agent.energy - 1.0)
                 agent.life_force = max(0.0, agent.life_force - 0.5)
+                agent.mood = max(0.0, agent.mood - 1.0)
 
         elif chip_type == "reproduction":
             agent.reproduction_load = max(0.0, agent.reproduction_load - 8.0)
             agent.life_force = min(100.0, agent.life_force + 2.0)
             agent.health = min(100.0, agent.health + 1.0)
             agent.reproduction_boost = min(3.0, agent.reproduction_boost + 1.0)
+            agent.mood = min(100.0, agent.mood + 1.0)
 
         elif chip_type == "bad":
             agent.health = max(0.0, agent.health - 6.0)
             agent.life_force = max(0.0, agent.life_force - 4.0)
             agent.risk_load = min(100.0, agent.risk_load + 8.0)
             agent.morality = max(0.0, agent.morality - 2.0)
+            agent.mood = max(0.0, agent.mood - 3.0)
 
         agent.clamp_state()
 
@@ -205,7 +337,11 @@ class World:
         agent.update_chip_memory(chip_type, reward)
         self._last_log = f"{agent.name} collected {chip_type}"
 
-    def _nearby_agents(self, agent: Simulite, max_distance: float = 1.5) -> list[Simulite]:
+    def _nearby_agents(
+        self,
+        agent: Simulite,
+        max_distance: float = 1.5,
+    ) -> list[Simulite]:
         nearby: list[Simulite] = []
         for other in self.living_agents():
             if other is agent:
@@ -213,6 +349,63 @@ class World:
             if agent.distance_to(other) <= max_distance:
                 nearby.append(other)
         return nearby
+
+    def _handle_social_interactions(self) -> None:
+        living = self.living_agents()
+
+        for i, a in enumerate(living):
+            for b in living[i + 1 :]:
+                dist = abs(a.x - b.x) + abs(a.y - b.y)
+                if dist > 1:
+                    continue
+
+                delta = 0.5
+                if a.mood < 35 or b.mood < 35:
+                    delta = -0.3
+
+                a.memory.update_affinity(b.name, delta)
+                b.memory.update_affinity(a.name, delta)
+
+                a.social = min(100.0, a.social + 1.5)
+                b.social = min(100.0, b.social + 1.5)
+                a.mood = min(100.0, a.mood + 1.0)
+                b.mood = min(100.0, b.mood + 1.0)
+                a.emotion = "social"
+                b.emotion = "social"
+
+    def _move_away_from_disliked(self, agent) -> bool:
+        disliked = [
+            other
+            for other in self.living_agents()
+            if other is not agent and agent.memory.get_affinity(other.name) < 0
+        ]
+        if not disliked:
+            return False
+
+        nearest = min(
+            disliked,
+            key=lambda other: abs(other.x - agent.x) + abs(other.y - agent.y),
+        )
+        current_dist = abs(nearest.x - agent.x) + abs(nearest.y - agent.y)
+
+        candidates = []
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nx = agent.x + dx
+            ny = agent.y + dy
+            if not self.grid.in_bounds(nx, ny):
+                continue
+            new_dist = abs(nearest.x - nx) + abs(nearest.y - ny)
+            if new_dist >= current_dist:
+                candidates.append((new_dist, nx, ny))
+
+        if not candidates:
+            return False
+
+        candidates.sort(reverse=True)
+        _, nx, ny = candidates[0]
+        agent.x = nx
+        agent.y = ny
+        return True
 
     def _attempt_help(self, helper: Simulite) -> None:
         if not helper.alive:
@@ -271,6 +464,11 @@ class World:
         helper.morality = min(100.0, helper.morality + 1.0)
         helper.social = min(100.0, helper.social + 0.5)
         helper.life_force = min(100.0, helper.life_force + 0.4)
+        helper.mood = min(100.0, helper.mood + 1.0)
+        target.mood = min(100.0, target.mood + 1.5)
+
+        helper.memory.update_affinity(target.name, 0.6)
+        target.memory.update_affinity(helper.name, 0.4)
 
         helper.clamp_state()
         target.clamp_state()
@@ -291,47 +489,39 @@ class World:
 
     def _record_metrics(self) -> None:
         living = self.living_agents()
+        dead = self.dead_agents()
 
-        if not living:
-            self.metrics_history.append(
-                {
-                    "tick": self.tick_count,
-                    "population": 0,
-                    "avg_life_force": 0.0,
-                    "avg_health": 0.0,
-                    "avg_energy": 0.0,
-                    "avg_nutrition": 0.0,
-                    "avg_rest": 0.0,
-                    "avg_exercise": 0.0,
-                    "avg_social": 0.0,
-                    "avg_speed": 0.0,
-                    "avg_agility": 0.0,
-                    "avg_generation": 0.0,
-                    "deaths_total": len(self.dead_agents()),
-                }
-            )
-            return
+        max_generation = max(
+            (int(getattr(a, "generation", 1)) for a in self.agents),
+            default=1,
+        )
+        total_births = sum(int(getattr(a, "births", 0)) for a in self.agents)
 
         def avg(values: list[float]) -> float:
-            return sum(values) / len(values)
+            return sum(values) / len(values) if values else 0.0
 
-        self.metrics_history.append(
-            {
-                "tick": self.tick_count,
-                "population": len(living),
-                "avg_life_force": avg([a.life_force for a in living]),
-                "avg_health": avg([a.health for a in living]),
-                "avg_energy": avg([a.energy for a in living]),
-                "avg_nutrition": avg([a.nutrition for a in living]),
-                "avg_rest": avg([a.rest for a in living]),
-                "avg_exercise": avg([a.exercise for a in living]),
-                "avg_social": avg([a.social for a in living]),
-                "avg_speed": avg([a.speed for a in living]),
-                "avg_agility": avg([a.agility for a in living]),
-                "avg_generation": avg([float(a.generation) for a in living]),
-                "deaths_total": len(self.dead_agents()),
-            }
-        )
+        row = {
+            "tick": self.tick_count,
+            "population": len(living),
+            "births": total_births,
+            "deaths": len(dead),
+            "max_generation": max_generation,
+            "trend": self._compute_trend(),
+            "weather": self.weather.kind,
+            "avg_life_force": avg([a.life_force for a in living]),
+            "avg_health": avg([a.health for a in living]),
+            "avg_energy": avg([a.energy for a in living]),
+            "avg_nutrition": avg([a.nutrition for a in living]),
+            "avg_rest": avg([a.rest for a in living]),
+            "avg_exercise": avg([a.exercise for a in living]),
+            "avg_social": avg([a.social for a in living]),
+            "avg_speed": avg([a.speed for a in living]),
+            "avg_agility": avg([a.agility for a in living]),
+            "avg_generation": avg([float(a.generation) for a in living]),
+            "deaths_total": len(dead),
+        }
+
+        self.metrics_history.append(row)
 
     def _history(self, key: str, limit: int = 50) -> list[float]:
         values = [float(row.get(key, 0.0)) for row in self.metrics_history[-limit:]]
@@ -541,7 +731,10 @@ class World:
             social=26.0 + 11.0 * effective_support,
             contribution=7.0 + 7.0 * effective_support,
             morality=35.0 + 11.0 * effective_support,
-            risk_load=max(4.0, 11.0 - 4.5 * effective_support + 3.0 * hardship + pressure * 20.0),
+            risk_load=max(
+                4.0,
+                11.0 - 4.5 * effective_support + 3.0 * hardship + pressure * 20.0,
+            ),
             reproduction_load=0.0,
             reproduction_boost=max(0.0, min(1.0, parent.reproduction_boost * 0.30)),
         )
@@ -550,7 +743,10 @@ class World:
         child.zone_memory = self._inherit_zone_memory(parent, effective_support)
         child.chip_memory = self._inherit_chip_memory(parent, effective_support)
 
-        child.action_memory["forage"] = max(child.action_memory.get("forage", 0.0), 0.18)
+        child.action_memory["forage"] = max(
+            child.action_memory.get("forage", 0.0),
+            0.18,
+        )
         child.zone_memory["forest"] = max(child.zone_memory.get("forest", 0.0), 0.12)
         child.chip_memory["bad"] = min(child.chip_memory.get("bad", 0.0), -0.12)
 
@@ -645,9 +841,11 @@ class World:
             agent.nutrition = max(0.0, agent.nutrition - nutrition_cost)
             agent.health = max(0.0, agent.health - health_cost)
             agent.life_force = max(0.0, agent.life_force - life_force_cost)
-            agent.reproduction_load = min(100.0, agent.reproduction_load + 18.0 + 6.0 * (made - 1))
+            agent.reproduction_load = min(
+                100.0,
+                agent.reproduction_load + 18.0 + 6.0 * (made - 1),
+            )
             agent.births += made
-
             agent.reproduction_boost = max(0.0, agent.reproduction_boost - made)
 
             if made == 1:
@@ -723,6 +921,7 @@ class World:
             "max_generation": max_generation,
             "generation_limit": self.max_generation_limit,
             "trend": self._compute_trend(),
+            "weather": self.weather.kind,
             "population_history": self._history("population"),
             "life_force_history": self._history("avg_life_force"),
             "health_history": self._history("avg_health"),
@@ -773,6 +972,7 @@ class World:
             f"Average age at death: {avg_age_at_death:.2f}",
             f"Food on grid: {len(self.food)}",
             f"Chips on grid: {len(self.chips)}",
+            f"Weather: {self.weather.kind}",
         ]
 
         if living:
@@ -826,23 +1026,22 @@ class World:
 
         return "\n".join(lines)
 
-    def save_metrics(self, path: str | Path = "outputs/simulation_metrics.csv") -> None:
-        out_path = Path(path)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
+    def save_metrics(self, path: str | Path | None = None) -> None:
+        if path is not None:
+            self.metrics_exporter.output_path = Path(path)
 
         if not self.metrics_history:
             return
 
-        fieldnames = list(self.metrics_history[0].keys())
-        with out_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(self.metrics_history)
+        last_row = self.metrics_history[-1]
+        self.metrics_exporter.export([last_row])
 
     def step(self) -> None:
         self.tick_count += 1
-        previous_dead_names = {a.name for a in self.dead_agents()}
+        self.tick = self.tick_count
+        self.weather.step()
 
+        previous_dead_names = {a.name for a in self.dead_agents()}
         self._last_log = f"Tick {self.tick_count}"
 
         if self.tick_count % 3 == 0:
@@ -853,19 +1052,43 @@ class World:
 
         zone_lookup = self.zone_lookup()
 
+        self._handle_social_interactions()
+
+        for agent in self.living_agents():
+            if hasattr(agent, "consider_goals"):
+                agent.consider_goals(self)
+
         for agent in self.living_agents():
             old_pos = (agent.x, agent.y)
 
             current_zone = self.get_zone(agent.x, agent.y)
             agent.step(current_zone=current_zone)
 
-            agent.move_random(
-                self.grid.width,
-                self.grid.height,
-                self.food,
-                zone_lookup,
-                self.chips,
-            )
+            if self._move_away_from_disliked(agent):
+                pass
+            else:
+                acted_on_goal = False
+                if getattr(agent, "goal", None):
+                    acted_on_goal = bool(agent.act_on_goal(self))
+
+                if not acted_on_goal:
+                    nearest_food = self._nearest_food_position(agent)
+                    if nearest_food is not None:
+                        agent._move_toward(
+                            nearest_food[0],
+                            nearest_food[1],
+                            self.grid.width,
+                            self.grid.height,
+                        )
+                    else:
+                        agent.move_random(
+                            self.grid.width,
+                            self.grid.height,
+                            self._food_positions(),
+                            zone_lookup,
+                            self.chips,
+                            self.living_agents(),
+                        )
 
             self._apply_zone_effects(agent)
             self._feed_agent_if_on_food(agent)
@@ -875,6 +1098,8 @@ class World:
             if old_pos != new_pos:
                 zone = self.get_zone(agent.x, agent.y)
                 self._last_log = f"{agent.name} moved to {new_pos} ({zone})"
+
+        self._handle_social_interactions()
 
         for agent in self.living_agents():
             self._attempt_help(agent)

@@ -26,6 +26,48 @@ def balance_band_score(
 
 
 @dataclass
+class Memory:
+    last_food: tuple[int, int] | None = None
+    affinity: dict[str, float] = field(default_factory=dict)
+
+    @property
+    def friend_affinity(self) -> dict[str, float]:
+        return self.affinity
+
+    @friend_affinity.setter
+    def friend_affinity(self, value: dict[str, float]) -> None:
+        self.affinity = dict(value)
+
+    def remember_food(self, x: int, y: int) -> None:
+        self.last_food = (x, y)
+
+    def update_affinity(self, name: str, delta: float) -> None:
+        self.affinity[name] = self.affinity.get(name, 0.0) + delta
+
+    def get_affinity(self, name: str) -> float:
+        return self.affinity.get(name, 0.0)
+
+    def favorite_friend(self) -> str | None:
+        if not self.affinity:
+            return None
+        name, score = max(self.affinity.items(), key=lambda item: item[1])
+        return name if score > 0 else None
+
+    def disliked_friend(self) -> str | None:
+        if not self.affinity:
+            return None
+        name, score = min(self.affinity.items(), key=lambda item: item[1])
+        return name if score < 0 else None
+
+
+@dataclass
+class Goal:
+    name: str
+    payload: object | None = None
+    stage: str = "start"
+
+
+@dataclass
 class Simulite:
     name: str
     x: int
@@ -62,6 +104,11 @@ class Simulite:
     move_mode: str = "wander"
     target_zone: str | None = None
     target_chip: str | None = None
+
+    mood: float = 50.0
+    emotion: str = "neutral"
+    memory: Memory = field(default_factory=Memory)
+    goal: Goal | None = None
 
     action_memory: dict[str, float] = field(
         default_factory=lambda: {
@@ -132,6 +179,7 @@ class Simulite:
         self.morality = clamp(self.morality)
         self.risk_load = clamp(self.risk_load)
         self.reproduction_load = clamp(self.reproduction_load)
+        self.mood = clamp(self.mood)
         self.reproduction_boost = clamp(self.reproduction_boost, 0.0, 3.0)
 
     def update_life_stage(self) -> None:
@@ -172,7 +220,7 @@ class Simulite:
         if self.age_ticks <= midpoint:
             return 0.5 + 0.5 * (self.age_ticks / midpoint)
 
-        decline_ratio = (self.age_ticks - midpoint) / (self.max_age_ticks - midpoint)
+        decline_ratio = (self.age_ticks - midpoint) / max(1, (self.max_age_ticks - midpoint))
         return 1.0 - 0.55 * decline_ratio
 
     def update_physical_profile(self) -> None:
@@ -221,19 +269,24 @@ class Simulite:
         if self.nutrition < 10:
             self.health -= 2.5
             self.life_force -= 2.0
+            self.mood -= 1.5
         elif self.nutrition < 25:
             self.health -= 1.0
+            self.mood -= 0.5
 
         if self.energy < 15:
             self.health -= 1.0
             self.life_force -= 0.8
+            self.mood -= 0.8
 
         if self.social < 15:
             self.life_force -= 0.8
+            self.mood -= 0.4
 
         if self.risk_load > 70:
             self.health -= 1.2
             self.life_force -= 1.0
+            self.mood -= 0.6
 
         self.clamp_state()
 
@@ -281,13 +334,13 @@ class Simulite:
 
         if penalty > 0:
             self.life_force -= penalty
+            self.mood -= penalty * 0.5
 
         self.clamp_state()
 
     def update_life_force(self) -> None:
         balance_score = self.compute_balance_score()
-        life_force_delta = balance_score - 6.5
-        self.life_force += life_force_delta
+        self.life_force += balance_score - 6.5
         self.clamp_state()
 
     def check_death(self) -> None:
@@ -297,22 +350,25 @@ class Simulite:
         if self.life_force <= 0:
             self.alive = False
             self.cause_of_death = "life_force_collapse"
+            self.emotion = "dead"
             return
 
         if self.health <= 0:
             self.alive = False
             self.cause_of_death = "health_collapse"
+            self.emotion = "dead"
             return
 
         if self.age_ticks >= self.max_age_ticks:
             self.alive = False
             self.cause_of_death = "old_age"
+            self.emotion = "dead"
             return
 
         if self.nutrition <= 0 and self.energy <= 5:
             self.alive = False
             self.cause_of_death = "starvation"
-            return
+            self.emotion = "dead"
 
     def _memory_bonus(self, action: str) -> float:
         return self.action_memory.get(action, 0.0) * 2.0
@@ -331,6 +387,10 @@ class Simulite:
             score += 2.0
         score += self.traits.curiosity * 0.5
         score += self._memory_bonus("forage")
+
+        if self.memory.last_food is not None and (self.nutrition < 45 or self.energy <= 8):
+            score += 3.0
+
         return score
 
     def _score_rest(self) -> float:
@@ -367,6 +427,10 @@ class Simulite:
             score -= (self.social - 72) * 0.8
         score += self.traits.sociability * 0.7
         score += self._memory_bonus("socialize")
+
+        if self.memory.favorite_friend() is not None:
+            score += 1.5
+
         return score
 
     def _score_contribute(self) -> float:
@@ -525,10 +589,16 @@ class Simulite:
             self.risk_load += 0.4
             self.nutrition += 3.5
             self.life_force += 0.6
+            self.mood += 0.8
             self.move_mode = "seek_food"
 
             if not survival_critical:
-                if self.target_chip in {"health", "exercise", "good_deed", "reproduction"}:
+                if self.target_chip in {
+                    "health",
+                    "exercise",
+                    "good_deed",
+                    "reproduction",
+                }:
                     self.move_mode = "seek_chip"
                 elif self.target_zone == "forest":
                     self.move_mode = "seek_zone"
@@ -539,6 +609,7 @@ class Simulite:
             self.risk_load -= 0.8
             self.exercise -= 0.2
             self.life_force += 0.2
+            self.mood += 0.6
             self.move_mode = "stay"
 
             if not survival_critical and self.target_zone == "village" and self.rest < 50:
@@ -549,6 +620,7 @@ class Simulite:
                 self.health -= 1.0
                 self.energy -= 1.0
                 self.life_force -= 0.8
+                self.mood -= 0.8
             else:
                 self.exercise += 3.0
                 self.health += 1.2
@@ -556,6 +628,7 @@ class Simulite:
                 self.rest -= 1.0
                 self.risk_load += 0.3
                 self.life_force += 0.2
+                self.mood += 0.4
             self.move_mode = "wander"
 
             if not survival_critical and self.target_chip == "exercise":
@@ -566,6 +639,7 @@ class Simulite:
             self.energy -= 0.9
             self.rest -= 0.4
             self.life_force += 0.2
+            self.mood += 1.0
             self.move_mode = "wander"
 
             if not survival_critical:
@@ -580,8 +654,10 @@ class Simulite:
             self.energy -= 1.3
             self.rest -= 0.4
             self.life_force += 0.3
+            self.mood += 0.6
             if self.energy < 20 or self.nutrition < 20:
                 self.life_force -= 0.6
+                self.mood -= 0.4
             self.move_mode = "wander"
 
             if not survival_critical:
@@ -598,6 +674,7 @@ class Simulite:
             self.morality += 1.0
             self.social += 0.7
             self.life_force += 0.2
+            self.mood += 0.9
             self.move_mode = "wander"
 
             if self.target_zone == "village" and not survival_critical:
@@ -606,6 +683,7 @@ class Simulite:
         elif action == "idle":
             self.rest += 1.0
             self.energy += 0.5
+            self.mood += 0.1
             self.move_mode = "stay"
 
         self.action_counts[action] += 1
@@ -637,8 +715,114 @@ class Simulite:
         new_value = old_value + learning_rate * (reward - old_value)
         self.chip_memory[chip_type] = max(-5.0, min(5.0, new_value))
 
+    def update_emotion(self) -> None:
+        if not self.alive:
+            self.emotion = "dead"
+        elif self.nutrition < 20:
+            self.emotion = "hungry"
+        elif self.energy < 20 or self.rest < 20:
+            self.emotion = "tired"
+        elif self.social < 15:
+            self.emotion = "lonely"
+        elif self.mood >= 65:
+            self.emotion = "happy"
+        elif self.mood <= 35:
+            self.emotion = "sad"
+        else:
+            self.emotion = "neutral"
+
+    def consider_goals(self, world) -> None:
+        self.goal = None
+
+        if not self.alive:
+            return
+
+        favorite_name = self.memory.favorite_friend()
+
+        if self.energy <= 6 and self.memory.last_food is not None and favorite_name:
+            self.goal = Goal(
+                name="EatThenGreet",
+                payload={"food": self.memory.last_food, "friend": favorite_name},
+                stage="eat",
+            )
+            self.move_mode = "seek_food"
+            return
+
+        if self.energy <= 6 and self.memory.last_food is not None:
+            self.goal = Goal(
+                name="VisitRememberedFood",
+                payload=self.memory.last_food,
+                stage="eat",
+            )
+            self.move_mode = "seek_food"
+            return
+
+        if self.nutrition < 35 and self.memory.last_food is not None:
+            self.goal = Goal(
+                name="VisitRememberedFood",
+                payload=self.memory.last_food,
+                stage="eat",
+            )
+            self.move_mode = "seek_food"
+            return
+
+        if favorite_name:
+            for agent in getattr(world, "agents", []):
+                if agent.name == favorite_name and getattr(agent, "alive", True):
+                    self.goal = Goal(
+                        name="GreetFavoriteFriend",
+                        payload=favorite_name,
+                        stage="greet",
+                    )
+                    self.move_mode = "seek_friend"
+                    return
+
+    def act_on_goal(self, world) -> bool:
+        if self.goal is None or not self.alive:
+            return False
+
+        if self.goal.name == "VisitRememberedFood":
+            if isinstance(self.goal.payload, tuple) and len(self.goal.payload) == 2:
+                tx, ty = self.goal.payload
+                self._move_toward(tx, ty, world.grid.width, world.grid.height)
+                return True
+
+        if self.goal.name == "GreetFavoriteFriend":
+            friend_name = self.goal.payload
+            for agent in getattr(world, "agents", []):
+                if agent.name == friend_name and agent.name != self.name:
+                    self._move_toward(agent.x, agent.y, world.grid.width, world.grid.height)
+                    return True
+
+        if self.goal.name == "EatThenGreet" and isinstance(self.goal.payload, dict):
+            food_pos = self.goal.payload.get("food")
+            friend_name = self.goal.payload.get("friend")
+
+            if self.goal.stage == "eat" and isinstance(food_pos, tuple) and len(food_pos) == 2:
+                if (self.x, self.y) != food_pos:
+                    self._move_toward(
+                        food_pos[0],
+                        food_pos[1],
+                        world.grid.width,
+                        world.grid.height,
+                    )
+                    return True
+                self.goal.stage = "greet"
+
+            if self.goal.stage == "greet" and isinstance(friend_name, str):
+                for agent in getattr(world, "agents", []):
+                    if agent.name == friend_name and agent.name != self.name:
+                        self._move_toward(agent.x, agent.y, world.grid.width, world.grid.height)
+                        return True
+
+        return False
+
+    def step_goal(self, world) -> None:
+        self.act_on_goal(world)
+
     def step(self, current_zone: str | None = None) -> None:
         if not self.alive:
+            self.update_emotion()
             return
 
         before_life = self.life_force
@@ -673,6 +857,9 @@ class Simulite:
         if current_zone is not None:
             self.update_zone_memory(current_zone, reward)
 
+        self.update_emotion()
+        self.clamp_state()
+
     def distance_to(self, other: "Simulite") -> float:
         return math.dist((self.x, self.y), (other.x, other.y))
 
@@ -689,6 +876,25 @@ class Simulite:
             dy = 1
         elif target_y < self.y:
             dy = -1
+
+        if abs(target_x - self.x) >= abs(target_y - self.y):
+            self.x = max(0, min(width - 1, self.x + dx))
+        else:
+            self.y = max(0, min(height - 1, self.y + dy))
+
+    def _move_away(self, target_x: int, target_y: int, width: int, height: int) -> None:
+        dx = 0
+        dy = 0
+
+        if target_x > self.x:
+            dx = -1
+        elif target_x < self.x:
+            dx = 1
+
+        if target_y > self.y:
+            dy = -1
+        elif target_y < self.y:
+            dy = 1
 
         if abs(target_x - self.x) >= abs(target_y - self.y):
             self.x = max(0, min(width - 1, self.x + dx))
@@ -738,6 +944,45 @@ class Simulite:
         self._move_toward(nearest[0], nearest[1], width, height)
         return True
 
+    def _move_toward_remembered_food(self, width: int, height: int) -> bool:
+        if self.memory.last_food is None:
+            return False
+
+        target_x, target_y = self.memory.last_food
+        if (target_x, target_y) == (self.x, self.y):
+            return False
+
+        self._move_toward(target_x, target_y, width, height)
+        return True
+
+    def _avoid_disliked_agents(
+        self,
+        other_agents: list["Simulite"] | None,
+        width: int,
+        height: int,
+    ) -> bool:
+        if not other_agents:
+            return False
+
+        disliked = [
+            agent
+            for agent in other_agents
+            if agent.name != self.name and self.memory.get_affinity(agent.name) < 0
+        ]
+        if not disliked:
+            return False
+
+        nearby = [agent for agent in disliked if abs(agent.x - self.x) + abs(agent.y - self.y) <= 1]
+        if not nearby:
+            return False
+
+        nearest = min(
+            nearby,
+            key=lambda agent: abs(agent.x - self.x) + abs(agent.y - self.y),
+        )
+        self._move_away(nearest.x, nearest.y, width, height)
+        return True
+
     def move_random(
         self,
         width: int,
@@ -745,6 +990,7 @@ class Simulite:
         food_positions: set[tuple[int, int]] | None = None,
         zone_lookup: dict[str, list[tuple[int, int]]] | None = None,
         chip_positions: dict[tuple[int, int], str] | None = None,
+        other_agents: list["Simulite"] | None = None,
     ) -> None:
         if not self.alive:
             return
@@ -762,6 +1008,20 @@ class Simulite:
         if self.move_mode == "stay":
             return
 
+        if self._avoid_disliked_agents(other_agents, width, height):
+            return
+
+        if self.move_mode == "seek_friend" and other_agents:
+            favorite_name = self.memory.favorite_friend()
+            if favorite_name:
+                matches = [
+                    a for a in other_agents if a.name == favorite_name and a.name != self.name
+                ]
+                if matches:
+                    friend = matches[0]
+                    self._move_toward(friend.x, friend.y, width, height)
+                    return
+
         if self.move_mode == "seek_chip":
             moved = self._move_toward_chip(chip_positions, width, height)
             if moved:
@@ -775,10 +1035,19 @@ class Simulite:
             self._move_toward(nearest[0], nearest[1], width, height)
             return
 
+        if self.move_mode == "seek_food" and (self.nutrition < 45 or self.energy <= 8):
+            if self._move_toward_remembered_food(width, height):
+                return
+
         if self.move_mode == "seek_zone" and self.target_zone:
             moved = self._move_toward_zone(self.target_zone, width, height, zone_lookup)
             if moved:
                 return
+
+        if (self.nutrition < 35 or self.energy <= 8) and self._move_toward_remembered_food(
+            width, height
+        ):
+            return
 
         options = [(-1, 0), (1, 0), (0, -1), (0, 1), (0, 0)]
         if self.energy < 15 or self.nutrition < 10:
