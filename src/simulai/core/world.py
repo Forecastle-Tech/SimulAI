@@ -126,11 +126,11 @@ class World:
                 ["good_deed"] * 2
                 + ["health"] * 2
                 + ["exercise"] * 2
-                + ["reproduction"] * 1
+                + ["reproduction"] * 2
                 + ["bad"] * 1
             ),
             "village": (["good_deed"] * 5 + ["health"] * 2 + ["exercise"] * 1 + ["bad"] * 1),
-            "drylands": (["bad"] * 5 + ["reproduction"] * 2 + ["exercise"] * 1 + ["health"] * 1),
+            "drylands": (["bad"] * 5 + ["reproduction"] * 1 + ["exercise"] * 1 + ["health"] * 2),
         }
 
         added = 0
@@ -210,11 +210,11 @@ class World:
         zone = self.get_zone(agent.x, agent.y)
 
         if zone == "forest":
-            agent.energy = min(100.0, agent.energy + 0.3)
+            agent.energy = min(100.0, agent.energy + 0.5)
 
         elif zone == "village":
-            agent.social = min(100.0, agent.social + 0.6)
-            agent.rest = min(100.0, agent.rest + 0.4)
+            agent.social = min(100.0, agent.social + 0.35)
+            agent.rest = min(100.0, agent.rest + 0.2)
             agent.life_force = min(100.0, agent.life_force + 0.2)
 
         elif zone == "drylands":
@@ -228,31 +228,32 @@ class World:
         pos = (agent.x, agent.y)
         ate = False
 
-        nutrition_gain = 24.0
-        energy_gain = 6.0
-        life_force_gain = 3.0
-        health_gain = 1.5
-        mood_gain = 5.0
+        nutrition_gain = 28.0
+        energy_gain = 9.0
+        life_force_gain = 4.0
+        health_gain = 1.8
+        mood_gain = 6.0
 
         if pos in self.food:
             self.food.remove(pos)
             zone = self.get_zone(agent.x, agent.y)
 
             if zone == "forest":
-                nutrition_gain += 4.0
-                energy_gain += 1.0
+                nutrition_gain += 5.0
+                energy_gain += 2.0
             elif zone == "drylands":
-                nutrition_gain -= 4.0
-                life_force_gain -= 0.5
+                nutrition_gain -= 3.0
+                life_force_gain -= 0.3
 
             ate = True
 
         item = self._grid_item_at(agent.x, agent.y)
         if self._is_food_object(item):
             food_energy = float(getattr(item, "energy", 5.0))
-            nutrition_gain = max(nutrition_gain, 12.0 + food_energy)
-            energy_gain = max(energy_gain, food_energy + 8.0)
-            mood_gain = max(mood_gain, 6.0)
+            nutrition_gain = max(nutrition_gain, 16.0 + food_energy)
+            energy_gain = max(energy_gain, food_energy + 10.0)
+            life_force_gain = max(life_force_gain, 4.5)
+            mood_gain = max(mood_gain, 7.0)
             self._clear_grid_item(agent.x, agent.y)
             ate = True
 
@@ -298,11 +299,12 @@ class World:
                 agent.mood = max(0.0, agent.mood - 1.0)
 
         elif chip_type == "reproduction":
-            agent.reproduction_load = max(0.0, agent.reproduction_load - 8.0)
-            agent.life_force = min(100.0, agent.life_force + 2.0)
-            agent.health = min(100.0, agent.health + 1.0)
-            agent.reproduction_boost = min(3.0, agent.reproduction_boost + 1.0)
-            agent.mood = min(100.0, agent.mood + 1.0)
+            agent.reproduction_load = max(0.0, agent.reproduction_load - 12.0)
+            agent.life_force = min(100.0, agent.life_force + 3.0)
+            agent.health = min(100.0, agent.health + 1.5)
+            agent.energy = min(100.0, agent.energy + 2.0)
+            agent.reproduction_boost = min(3.0, agent.reproduction_boost + 1.4)
+            agent.mood = min(100.0, agent.mood + 1.5)
 
         elif chip_type == "bad":
             agent.health = max(0.0, agent.health - 6.0)
@@ -765,17 +767,17 @@ class World:
         if agent.life_stage not in {"young_adult", "adult", "mature"}:
             return False
 
-        if agent.life_force < 65:
+        if agent.life_force < 58:
             return False
-        if agent.health < 55:
+        if agent.health < 50:
             return False
-        if agent.energy < 50:
+        if agent.energy < 42:
             return False
-        if agent.nutrition < 50:
+        if agent.nutrition < 42:
             return False
-        if agent.risk_load > 40:
+        if agent.risk_load > 45:
             return False
-        if agent.reproduction_load > 20:
+        if agent.reproduction_load > 26:
             return False
 
         return True
@@ -812,7 +814,7 @@ class World:
             memory_bonus = max(0.0, agent.action_memory.get("forage", 0.0)) * 0.002
 
             generation_penalty = self._generation_pressure(agent.generation) * 0.08
-            birth_chance = 0.018 + fertility_bonus + chip_bonus + memory_bonus - generation_penalty
+            birth_chance = 0.05 + fertility_bonus + chip_bonus + memory_bonus - generation_penalty
 
             if random.random() >= max(0.003, birth_chance):
                 continue
@@ -832,10 +834,10 @@ class World:
 
             generation_cost = 1.0 + self._generation_pressure(agent.generation) * 10.0
 
-            energy_cost = 10.0 + 4.0 * (made - 1) + generation_cost
-            nutrition_cost = 8.0 + 4.0 * (made - 1) + generation_cost * 0.8
-            health_cost = 5.0 + 2.5 * (made - 1) + generation_cost * 0.6
-            life_force_cost = 4.0 + 2.0 * (made - 1) + generation_cost * 0.5
+            energy_cost = 7.5 + 3.0 * (made - 1) + generation_cost * 0.75
+            nutrition_cost = 6.5 + 3.0 * (made - 1) + generation_cost * 0.6
+            health_cost = 3.5 + 1.8 * (made - 1) + generation_cost * 0.45
+            life_force_cost = 2.8 + 1.4 * (made - 1) + generation_cost * 0.35
 
             agent.energy = max(0.0, agent.energy - energy_cost)
             agent.nutrition = max(0.0, agent.nutrition - nutrition_cost)
@@ -843,7 +845,7 @@ class World:
             agent.life_force = max(0.0, agent.life_force - life_force_cost)
             agent.reproduction_load = min(
                 100.0,
-                agent.reproduction_load + 18.0 + 6.0 * (made - 1),
+                agent.reproduction_load + 14.0 + 5.0 * (made - 1),
             )
             agent.births += made
             agent.reproduction_boost = max(0.0, agent.reproduction_boost - made)
@@ -1045,7 +1047,7 @@ class World:
         self._last_log = f"Tick {self.tick_count}"
 
         if self.tick_count % 3 == 0:
-            self.sprinkle_food(count=3)
+            self.sprinkle_food(count=4)
 
         if self.tick_count % 5 == 0:
             self.sprinkle_chips(count=3)

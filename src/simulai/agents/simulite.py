@@ -256,37 +256,37 @@ class Simulite:
     def apply_passive_decay(self) -> None:
         metabolism_factor = self.traits.metabolism / 10.0
 
-        self.nutrition -= 1.4 + 1.0 * metabolism_factor
-        self.energy -= 1.0
-        self.rest -= 0.7
-        self.social -= 0.3
-        self.exercise -= 0.10
-        self.contribution -= 0.12
-        self.reproduction_load = max(0.0, self.reproduction_load - 0.5)
-        self.risk_load = max(0.0, self.risk_load - 0.3)
+        self.nutrition -= 1.15 + 0.75 * metabolism_factor
+        self.energy -= 0.75
+        self.rest -= 0.55
+        self.social -= 0.22
+        self.exercise -= 0.08
+        self.contribution -= 0.08
+        self.reproduction_load = max(0.0, self.reproduction_load - 0.45)
+        self.risk_load = max(0.0, self.risk_load - 0.25)
         self.reproduction_boost = max(0.0, self.reproduction_boost - 0.02)
 
         if self.nutrition < 10:
-            self.health -= 2.5
-            self.life_force -= 2.0
-            self.mood -= 1.5
+            self.health -= 1.8
+            self.life_force -= 1.4
+            self.mood -= 1.2
         elif self.nutrition < 25:
-            self.health -= 1.0
-            self.mood -= 0.5
+            self.health -= 0.7
+            self.mood -= 0.35
 
         if self.energy < 15:
-            self.health -= 1.0
-            self.life_force -= 0.8
-            self.mood -= 0.8
+            self.health -= 0.7
+            self.life_force -= 0.55
+            self.mood -= 0.5
 
         if self.social < 15:
-            self.life_force -= 0.8
-            self.mood -= 0.4
+            self.life_force -= 0.45
+            self.mood -= 0.25
 
         if self.risk_load > 70:
-            self.health -= 1.2
-            self.life_force -= 1.0
-            self.mood -= 0.6
+            self.health -= 0.9
+            self.life_force -= 0.7
+            self.mood -= 0.4
 
         self.clamp_state()
 
@@ -340,7 +340,7 @@ class Simulite:
 
     def update_life_force(self) -> None:
         balance_score = self.compute_balance_score()
-        self.life_force += balance_score - 6.5
+        self.life_force += balance_score - 5.8
         self.clamp_state()
 
     def check_death(self) -> None:
@@ -381,15 +381,15 @@ class Simulite:
 
     def _score_forage(self) -> float:
         score = 0.0
-        if self.nutrition < 45:
-            score += (45 - self.nutrition) * 1.6
-        if self.energy < 25:
-            score += 2.0
+        if self.nutrition < 50:
+            score += (50 - self.nutrition) * 1.8
+        if self.energy < 30:
+            score += (30 - self.energy) * 0.5
         score += self.traits.curiosity * 0.5
         score += self._memory_bonus("forage")
 
-        if self.memory.last_food is not None and (self.nutrition < 45 or self.energy <= 8):
-            score += 3.0
+        if self.memory.last_food is not None and (self.nutrition < 50 or self.energy <= 12):
+            score += 4.0
 
         return score
 
