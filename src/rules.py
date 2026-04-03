@@ -100,32 +100,32 @@ def nutrition_modifier(agent: Any) -> float:
     if agent.nutrition >= 40:
         return 1.0
     if agent.nutrition >= 25:
-        return 0.75
+        return 0.78
     if agent.nutrition >= 10:
-        return 0.45
-    return 0.20
+        return 0.50
+    return 0.24
 
 
 def energy_modifier(agent: Any) -> float:
     if agent.energy >= 50:
         return 1.0
     if agent.energy >= 30:
-        return 0.75
+        return 0.78
     if agent.energy >= 15:
-        return 0.50
-    return 0.25
+        return 0.55
+    return 0.30
 
 
 def age_curve_multiplier(agent: Any) -> float:
     a = agent.age_ticks
     max_age = agent.max_age_ticks
-    midpoint = max_age * 0.45
+    midpoint = max_age * 0.48
 
     if a <= midpoint:
-        return 0.5 + 0.5 * (a / midpoint)
+        return 0.56 + 0.44 * (a / midpoint)
 
     decline_ratio = (a - midpoint) / (max_age - midpoint)
-    return 1.0 - 0.55 * decline_ratio
+    return 1.0 - 0.48 * decline_ratio
 
 
 def update_physical_profile(agent: Any) -> None:
@@ -133,8 +133,8 @@ def update_physical_profile(agent: Any) -> None:
     n_mod = nutrition_modifier(agent)
     e_mod = energy_modifier(agent)
 
-    agent.speed = max(0.2, base_curve * n_mod * e_mod)
-    agent.agility = max(0.2, base_curve * (0.7 * n_mod + 0.3 * e_mod))
+    agent.speed = max(0.22, base_curve * n_mod * e_mod)
+    agent.agility = max(0.22, base_curve * (0.7 * n_mod + 0.3 * e_mod))
 
 
 def clamp_agent_state(agent: Any) -> None:
@@ -154,76 +154,55 @@ def clamp_agent_state(agent: Any) -> None:
 def apply_passive_decay(agent: Any) -> None:
     metabolism = agent.traits["metabolism"]
 
-    agent.nutrition -= 2.0 + 1.5 * metabolism
-    agent.energy -= 1.5
-    agent.rest -= 1.0
-    agent.social -= 0.4
-    agent.exercise -= 0.15
-    agent.contribution -= 0.2
-    agent.reproduction_load = max(0.0, agent.reproduction_load - 0.5)
-    agent.risk_load = max(0.0, agent.risk_load - 0.3)
+    agent.nutrition -= 1.7 + 1.2 * metabolism
+    agent.energy -= 1.2
+    agent.rest -= 0.85
+    agent.social -= 0.28
+    agent.exercise -= 0.10
+    agent.contribution -= 0.12
+    agent.reproduction_load = max(0.0, agent.reproduction_load - 0.65)
+    agent.risk_load = max(0.0, agent.risk_load - 0.35)
 
     if agent.nutrition < THRESHOLDS["starving"]:
-        agent.health -= 2.5
-        agent.life_force -= 2.0
+        agent.health -= 1.8
+        agent.life_force -= 1.5
     elif agent.nutrition < THRESHOLDS["weak_nutrition"]:
-        agent.health -= 1.0
+        agent.health -= 0.7
 
     if agent.energy < THRESHOLDS["low_energy"]:
-        agent.health -= 1.0
-        agent.life_force -= 0.8
+        agent.health -= 0.7
+        agent.life_force -= 0.55
 
     if agent.exercise > 70:
-        agent.health -= 0.8
-        agent.energy -= 1.2
+        agent.health -= 0.55
+        agent.energy -= 0.85
 
     if agent.rest > 75:
-        agent.exercise -= 0.5
-        agent.contribution -= 0.3
+        agent.exercise -= 0.35
+        agent.contribution -= 0.18
 
     if agent.social < 15:
-        agent.life_force -= 0.8
+        agent.life_force -= 0.45
 
     if agent.social > 80:
-        agent.energy -= 0.6
-        agent.rest -= 0.4
+        agent.energy -= 0.35
+        agent.rest -= 0.22
 
     if agent.risk_load > 70:
-        agent.health -= 1.2
-        agent.life_force -= 1.0
+        agent.health -= 0.9
+        agent.life_force -= 0.75
 
     clamp_agent_state(agent)
 
 
 def compute_balance_score(agent: Any) -> float:
-    nutrition_score = balance_band_score(
-        agent.nutrition,
-        *OPTIMAL_BANDS["nutrition"],
-    )
-    rest_score = balance_band_score(
-        agent.rest,
-        *OPTIMAL_BANDS["rest"],
-    )
-    exercise_score = balance_band_score(
-        agent.exercise,
-        *OPTIMAL_BANDS["exercise"],
-    )
-    social_score = balance_band_score(
-        agent.social,
-        *OPTIMAL_BANDS["social"],
-    )
-    contribution_score = balance_band_score(
-        agent.contribution,
-        *OPTIMAL_BANDS["contribution"],
-    )
-    morality_score = balance_band_score(
-        agent.morality,
-        *OPTIMAL_BANDS["morality"],
-    )
-    risk_score = balance_band_score(
-        agent.risk_load,
-        *OPTIMAL_BANDS["risk_load"],
-    )
+    nutrition_score = balance_band_score(agent.nutrition, *OPTIMAL_BANDS["nutrition"])
+    rest_score = balance_band_score(agent.rest, *OPTIMAL_BANDS["rest"])
+    exercise_score = balance_band_score(agent.exercise, *OPTIMAL_BANDS["exercise"])
+    social_score = balance_band_score(agent.social, *OPTIMAL_BANDS["social"])
+    contribution_score = balance_band_score(agent.contribution, *OPTIMAL_BANDS["contribution"])
+    morality_score = balance_band_score(agent.morality, *OPTIMAL_BANDS["morality"])
+    risk_score = balance_band_score(agent.risk_load, *OPTIMAL_BANDS["risk_load"])
     reproduction_score = balance_band_score(
         agent.reproduction_load,
         *OPTIMAL_BANDS["reproduction_load"],
@@ -244,7 +223,7 @@ def compute_balance_score(agent: Any) -> float:
 
 def update_life_force(agent: Any) -> None:
     balance_score = compute_balance_score(agent)
-    life_force_delta = balance_score - 6.5
+    life_force_delta = balance_score - 6.2
     agent.life_force += life_force_delta
     clamp_agent_state(agent)
 
@@ -268,7 +247,7 @@ def check_death(agent: Any) -> None:
         agent.cause_of_death = "old_age"
         return
 
-    if agent.nutrition <= 0 and agent.energy <= 5:
+    if agent.nutrition <= 0 and agent.energy <= 4:
         agent.alive = False
         agent.cause_of_death = "starvation"
 

@@ -99,7 +99,7 @@ class World:
 
     def sprinkle_food(self, count: int = 5) -> None:
         added = 0
-        weighted_zone_choices = ["forest"] * 5 + ["plains"] * 3 + ["village"] * 2 + ["drylands"] * 1
+        weighted_zone_choices = ["forest"] * 6 + ["plains"] * 4 + ["village"] * 2 + ["drylands"] * 1
 
         for _ in range(count):
             zone_name = random.choice(weighted_zone_choices)
@@ -121,7 +121,7 @@ class World:
 
     def sprinkle_chips(self, count: int = 3) -> None:
         zone_chip_weights = {
-            "forest": (["health"] * 4 + ["exercise"] * 3 + ["good_deed"] * 1 + ["bad"] * 1),
+            "forest": ["health"] * 4 + ["exercise"] * 3 + ["good_deed"] * 1 + ["bad"] * 1,
             "plains": (
                 ["good_deed"] * 2
                 + ["health"] * 2
@@ -129,8 +129,8 @@ class World:
                 + ["reproduction"] * 2
                 + ["bad"] * 1
             ),
-            "village": (["good_deed"] * 5 + ["health"] * 2 + ["exercise"] * 1 + ["bad"] * 1),
-            "drylands": (["bad"] * 5 + ["reproduction"] * 1 + ["exercise"] * 1 + ["health"] * 2),
+            "village": ["good_deed"] * 5 + ["health"] * 2 + ["exercise"] * 1 + ["bad"] * 1,
+            "drylands": ["bad"] * 5 + ["reproduction"] * 1 + ["exercise"] * 1 + ["health"] * 2,
         }
 
         added = 0
@@ -152,6 +152,95 @@ class World:
 
         if added > 0:
             self._last_log = f"Spawned chips: +{added}"
+
+    def _apply_population_rescue(self) -> None:
+        living_count = len(self.living_agents())
+
+        if living_count <= 2:
+            self.sprinkle_food(count=5)
+            if self.tick_count % 2 == 0:
+                self.sprinkle_chips(count=1)
+            self._last_log = "Population rescue: critical support"
+        elif living_count <= 4:
+            if self.tick_count % 3 == 0:
+                self.sprinkle_food(count=2)
+            if living_count <= 3 and self.tick_count % 6 == 0:
+                self.sprinkle_chips(count=1)
+            self._last_log = "Population rescue: low-population support"
+
+    def _apply_population_scaled_food_support(self) -> None:
+        living_count = len(self.living_agents())
+
+        # Version I:
+        # restore some lower-mid support without reopening strong carry.
+        if 5 <= living_count <= 8 and self.tick_count % 4 == 0:
+            self.sprinkle_food(count=1)
+        elif 9 <= living_count <= 12 and self.tick_count % 5 == 0:
+            self.sprinkle_food(count=1)
+
+    def _apply_low_population_recovery(self) -> None:
+        living = self.living_agents()
+        living_count = len(living)
+
+        if living_count == 0 or living_count > 4:
+            return
+
+        for agent in living:
+            agent.energy = min(100.0, agent.energy + 0.65)
+            agent.nutrition = min(100.0, agent.nutrition + 0.65)
+            agent.life_force = min(100.0, agent.life_force + 0.35)
+            agent.health = min(100.0, agent.health + 0.24)
+            agent.risk_load = max(0.0, agent.risk_load - 0.22)
+            agent.clamp_state()
+
+    def _apply_low_population_rebound(self) -> None:
+        living = self.living_agents()
+        living_count = len(living)
+
+        # Version I:
+        # tiny rebound only at critical population, lighter than H.
+        if living_count == 0 or living_count > 3:
+            return
+
+        if self.tick_count % 3 == 0:
+            extra_food = 2 if living_count == 1 else 1
+            self.sprinkle_food(count=extra_food)
+
+        if living_count == 1 and self.tick_count % 6 == 0:
+            self.sprinkle_chips(count=1)
+
+        for agent in living:
+            agent.energy = min(100.0, agent.energy + 0.22)
+            agent.nutrition = min(100.0, agent.nutrition + 0.22)
+            agent.life_force = min(100.0, agent.life_force + 0.12)
+            agent.health = min(100.0, agent.health + 0.08)
+            agent.reproduction_load = max(0.0, agent.reproduction_load - 0.18)
+            agent.risk_load = max(0.0, agent.risk_load - 0.10)
+            agent.clamp_state()
+
+        self._last_log = f"Low-pop rebound support: {living_count} survivors"
+
+    def _apply_mid_high_population_restraint(self) -> None:
+        living = self.living_agents()
+        living_count = len(living)
+
+        if living_count < 14:
+            return
+
+        for agent in living:
+            if living_count >= 20:
+                agent.energy = max(0.0, agent.energy - 0.32)
+                agent.nutrition = max(0.0, agent.nutrition - 0.22)
+                agent.risk_load = min(100.0, agent.risk_load + 0.24)
+            elif living_count >= 17:
+                agent.energy = max(0.0, agent.energy - 0.22)
+                agent.nutrition = max(0.0, agent.nutrition - 0.14)
+                agent.risk_load = min(100.0, agent.risk_load + 0.16)
+            else:  # 14-16
+                agent.energy = max(0.0, agent.energy - 0.12)
+                agent.risk_load = min(100.0, agent.risk_load + 0.08)
+
+            agent.clamp_state()
 
     def _grid_item_at(self, x: int, y: int):
         if hasattr(self.grid, "get"):
@@ -210,16 +299,17 @@ class World:
         zone = self.get_zone(agent.x, agent.y)
 
         if zone == "forest":
-            agent.energy = min(100.0, agent.energy + 0.5)
+            agent.energy = min(100.0, agent.energy + 0.6)
+            agent.life_force = min(100.0, agent.life_force + 0.15)
 
         elif zone == "village":
-            agent.social = min(100.0, agent.social + 0.35)
-            agent.rest = min(100.0, agent.rest + 0.2)
-            agent.life_force = min(100.0, agent.life_force + 0.2)
+            agent.social = min(100.0, agent.social + 0.4)
+            agent.rest = min(100.0, agent.rest + 0.25)
+            agent.life_force = min(100.0, agent.life_force + 0.25)
 
         elif zone == "drylands":
-            agent.energy = max(0.0, agent.energy - 0.4)
-            agent.risk_load = min(100.0, agent.risk_load + 0.5)
+            agent.energy = max(0.0, agent.energy - 0.3)
+            agent.risk_load = min(100.0, agent.risk_load + 0.35)
 
     def _feed_agent_if_on_food(self, agent) -> None:
         if not getattr(agent, "alive", True):
@@ -228,32 +318,36 @@ class World:
         pos = (agent.x, agent.y)
         ate = False
 
-        nutrition_gain = 28.0
-        energy_gain = 9.0
-        life_force_gain = 4.0
-        health_gain = 1.8
-        mood_gain = 6.0
+        nutrition_gain = 32.0
+        energy_gain = 11.0
+        life_force_gain = 4.8
+        health_gain = 2.2
+        mood_gain = 6.5
 
         if pos in self.food:
             self.food.remove(pos)
             zone = self.get_zone(agent.x, agent.y)
 
             if zone == "forest":
-                nutrition_gain += 5.0
-                energy_gain += 2.0
+                nutrition_gain += 6.5
+                energy_gain += 3.0
+                life_force_gain += 0.4
+            elif zone == "plains":
+                nutrition_gain += 2.0
+                energy_gain += 1.0
             elif zone == "drylands":
-                nutrition_gain -= 3.0
-                life_force_gain -= 0.3
+                nutrition_gain -= 2.0
+                life_force_gain -= 0.2
 
             ate = True
 
         item = self._grid_item_at(agent.x, agent.y)
         if self._is_food_object(item):
             food_energy = float(getattr(item, "energy", 5.0))
-            nutrition_gain = max(nutrition_gain, 16.0 + food_energy)
-            energy_gain = max(energy_gain, food_energy + 10.0)
-            life_force_gain = max(life_force_gain, 4.5)
-            mood_gain = max(mood_gain, 7.0)
+            nutrition_gain = max(nutrition_gain, 18.0 + food_energy)
+            energy_gain = max(energy_gain, food_energy + 11.0)
+            life_force_gain = max(life_force_gain, 4.8)
+            mood_gain = max(mood_gain, 7.2)
             self._clear_grid_item(agent.x, agent.y)
             ate = True
 
@@ -299,12 +393,12 @@ class World:
                 agent.mood = max(0.0, agent.mood - 1.0)
 
         elif chip_type == "reproduction":
-            agent.reproduction_load = max(0.0, agent.reproduction_load - 12.0)
-            agent.life_force = min(100.0, agent.life_force + 3.0)
-            agent.health = min(100.0, agent.health + 1.5)
+            agent.reproduction_load = max(0.0, agent.reproduction_load - 11.0)
+            agent.life_force = min(100.0, agent.life_force + 2.2)
+            agent.health = min(100.0, agent.health + 1.3)
             agent.energy = min(100.0, agent.energy + 2.0)
-            agent.reproduction_boost = min(3.0, agent.reproduction_boost + 1.4)
-            agent.mood = min(100.0, agent.mood + 1.5)
+            agent.reproduction_boost = min(2.2, agent.reproduction_boost + 1.15)
+            agent.mood = min(100.0, agent.mood + 1.2)
 
         elif chip_type == "bad":
             agent.health = max(0.0, agent.health - 6.0)
@@ -565,7 +659,7 @@ class World:
 
         return self.grid.random_empty_cell()
 
-    def _mutate_trait(self, value: float, spread: float = 0.6) -> float:
+    def _mutate_trait(self, value: float, spread: float = 0.55) -> float:
         return max(0.0, min(10.0, value + random.uniform(-spread, spread)))
 
     def _inherit_traits(self, parent: Simulite) -> Traits:
@@ -606,29 +700,29 @@ class World:
         if generation <= 2:
             return 0.0
         if generation == 3:
-            return 0.03
+            return 0.02
         if generation == 4:
-            return 0.06
+            return 0.04
         if generation == 5:
-            return 0.10
-        return 0.14
+            return 0.07
+        return 0.10
 
     def _lineage_fatigue(self, parent: Simulite) -> float:
         fatigue = 0.0
 
-        if parent.births >= 3:
-            fatigue += 0.03 * (parent.births - 2)
+        if parent.births >= 4:
+            fatigue += 0.02 * (parent.births - 3)
 
-        if parent.life_force < 55:
-            fatigue += 0.05
-        if parent.health < 50:
-            fatigue += 0.05
-        if parent.nutrition < 45:
+        if parent.life_force < 50:
+            fatigue += 0.03
+        if parent.health < 45:
+            fatigue += 0.03
+        if parent.nutrition < 40:
+            fatigue += 0.03
+        if parent.reproduction_load > 24:
             fatigue += 0.04
-        if parent.reproduction_load > 22:
-            fatigue += 0.05
 
-        return min(0.22, fatigue)
+        return min(0.14, fatigue)
 
     def _legacy_advantage(self, parent: Simulite) -> float:
         score = self._lineage_score(parent)
@@ -715,8 +809,8 @@ class World:
         fatigue = self._lineage_fatigue(parent)
         legacy = self._legacy_advantage(parent)
 
-        effective_support = max(0.18, min(0.95, support + legacy - pressure - fatigue))
-        hardship = max(0.0, 0.55 - effective_support)
+        effective_support = max(0.24, min(0.95, support + legacy - pressure - fatigue))
+        hardship = max(0.0, 0.52 - effective_support)
 
         child = Simulite(
             name=child_name,
@@ -724,18 +818,18 @@ class World:
             y=spawn[1],
             traits=self._inherit_traits(parent),
             generation=parent.generation + 1,
-            life_force=max(18.0, 30.0 + 30.0 * effective_support - 8.0 * hardship),
-            health=max(18.0, 27.0 + 28.0 * effective_support - 7.0 * hardship),
-            energy=max(20.0, 30.0 + 22.0 * effective_support - 5.0 * hardship),
-            nutrition=max(18.0, 22.0 + 25.0 * effective_support - 7.0 * hardship),
-            rest=36.0 + 9.0 * effective_support,
-            exercise=17.0 + 7.0 * effective_support,
-            social=26.0 + 11.0 * effective_support,
-            contribution=7.0 + 7.0 * effective_support,
-            morality=35.0 + 11.0 * effective_support,
+            life_force=max(22.0, 32.0 + 30.0 * effective_support - 6.0 * hardship),
+            health=max(22.0, 29.0 + 28.0 * effective_support - 6.0 * hardship),
+            energy=max(24.0, 32.0 + 22.0 * effective_support - 4.0 * hardship),
+            nutrition=max(22.0, 24.0 + 25.0 * effective_support - 5.0 * hardship),
+            rest=38.0 + 9.0 * effective_support,
+            exercise=18.0 + 7.0 * effective_support,
+            social=28.0 + 11.0 * effective_support,
+            contribution=8.0 + 7.0 * effective_support,
+            morality=36.0 + 11.0 * effective_support,
             risk_load=max(
-                4.0,
-                11.0 - 4.5 * effective_support + 3.0 * hardship + pressure * 20.0,
+                3.0,
+                10.0 - 4.0 * effective_support + 2.4 * hardship + pressure * 16.0,
             ),
             reproduction_load=0.0,
             reproduction_boost=max(0.0, min(1.0, parent.reproduction_boost * 0.30)),
@@ -745,10 +839,7 @@ class World:
         child.zone_memory = self._inherit_zone_memory(parent, effective_support)
         child.chip_memory = self._inherit_chip_memory(parent, effective_support)
 
-        child.action_memory["forage"] = max(
-            child.action_memory.get("forage", 0.0),
-            0.18,
-        )
+        child.action_memory["forage"] = max(child.action_memory.get("forage", 0.0), 0.18)
         child.zone_memory["forest"] = max(child.zone_memory.get("forest", 0.0), 0.12)
         child.chip_memory["bad"] = min(child.chip_memory.get("bad", 0.0), -0.12)
 
@@ -767,56 +858,127 @@ class World:
         if agent.life_stage not in {"young_adult", "adult", "mature"}:
             return False
 
-        if agent.life_force < 58:
+        if agent.life_force < 56:
             return False
         if agent.health < 50:
             return False
-        if agent.energy < 42:
+        if agent.energy < 43:
             return False
-        if agent.nutrition < 42:
+        if agent.nutrition < 43:
+            return False
+        if agent.rest < 30:
+            return False
+        if agent.social < 26:
+            return False
+        if agent.morality < 36:
+            return False
+        if agent.contribution < 12:
             return False
         if agent.risk_load > 45:
             return False
-        if agent.reproduction_load > 26:
+        if agent.reproduction_load > 24:
             return False
 
         return True
 
     def _offspring_count_for_parent(self, parent: Simulite) -> int:
-        count = 1
+        living_count = len(self.living_agents())
         boost = float(getattr(parent, "reproduction_boost", 0.0))
 
         elite_parent = (
-            parent.life_force > 82
-            and parent.health > 78
-            and parent.energy > 74
-            and parent.nutrition > 74
-            and parent.morality > 55
+            parent.life_force > 88
+            and parent.health > 82
+            and parent.energy > 76
+            and parent.nutrition > 76
+            and parent.morality > 62
+            and parent.reproduction_load < 10
         )
 
-        if boost >= 1.0 and elite_parent:
-            if boost >= 2.0 and random.random() < 0.20:
-                count = 3
-            elif random.random() < 0.40:
-                count = 2
+        if living_count <= 2 and boost >= 1.8 and elite_parent and random.random() < 0.07:
+            return 2
 
-        return count
+        return 1
+
+    def _density_penalty(self, living_count: int) -> float:
+        if living_count >= 20:
+            return 0.045
+        if living_count >= 17:
+            return 0.032
+        if living_count >= 14:
+            return 0.022
+        if living_count >= 11:
+            return 0.013
+        if living_count >= 8:
+            return 0.006
+        return 0.0
+
+    def _reproduction_cost_multiplier(self, living_count: int) -> float:
+        if living_count <= 3:
+            return 0.94
+        if living_count >= 20:
+            return 1.24
+        if living_count >= 17:
+            return 1.17
+        if living_count >= 14:
+            return 1.10
+        if living_count >= 11:
+            return 1.04
+        return 1.0
+
+    def _trend_penalty(self) -> float:
+        if len(self.metrics_history) < 3:
+            return 0.0
+
+        recent = self.metrics_history[-3:]
+        pops = [int(row.get("population", 0)) for row in recent]
+
+        if pops[2] > pops[1] > pops[0]:
+            return 0.008
+        if pops[2] > pops[1]:
+            return 0.003
+        return 0.0
 
     def _attempt_reproduction(self) -> None:
         births_this_tick: list[Simulite] = []
+
+        living_count = len(self.living_agents())
+        low_pop_bonus = 0.010 if living_count <= 3 else 0.0
+        critical_bonus = 0.008 if living_count <= 2 else 0.0
+        density_penalty = self._density_penalty(living_count)
+        cost_multiplier = self._reproduction_cost_multiplier(living_count)
+        trend_penalty = self._trend_penalty()
 
         for agent in list(self.living_agents()):
             if not self._can_reproduce(agent):
                 continue
 
-            fertility_bonus = agent.traits.resilience * 0.003
-            chip_bonus = float(getattr(agent, "reproduction_boost", 0.0)) * 0.01
-            memory_bonus = max(0.0, agent.action_memory.get("forage", 0.0)) * 0.002
+            fertility_bonus = agent.traits.resilience * 0.0028
+            chip_bonus = float(getattr(agent, "reproduction_boost", 0.0)) * 0.0085
+            memory_bonus = max(0.0, agent.action_memory.get("forage", 0.0)) * 0.0017
+            social_bonus = max(0.0, min(agent.social, 60.0) - 35.0) * 0.00030
 
-            generation_penalty = self._generation_pressure(agent.generation) * 0.08
-            birth_chance = 0.05 + fertility_bonus + chip_bonus + memory_bonus - generation_penalty
+            generation_penalty = self._generation_pressure(agent.generation) * 0.07
+            burden_penalty = max(0.0, agent.reproduction_load - 10.0) * 0.00065
+            risk_penalty = max(0.0, agent.risk_load - 20.0) * 0.00040
+            births_penalty = max(0, agent.births - 1) * 0.003
 
-            if random.random() >= max(0.003, birth_chance):
+            birth_chance = (
+                0.042
+                + fertility_bonus
+                + chip_bonus
+                + memory_bonus
+                + social_bonus
+                + low_pop_bonus
+                + critical_bonus
+                - generation_penalty
+                - density_penalty
+                - trend_penalty
+                - burden_penalty
+                - risk_penalty
+                - births_penalty
+            )
+
+            if random.random() >= max(0.0035, birth_chance):
                 continue
 
             offspring_target = self._offspring_count_for_parent(agent)
@@ -832,12 +994,17 @@ class World:
             if made == 0:
                 continue
 
-            generation_cost = 1.0 + self._generation_pressure(agent.generation) * 10.0
+            generation_cost = 0.92 + self._generation_pressure(agent.generation) * 8.0
 
-            energy_cost = 7.5 + 3.0 * (made - 1) + generation_cost * 0.75
-            nutrition_cost = 6.5 + 3.0 * (made - 1) + generation_cost * 0.6
-            health_cost = 3.5 + 1.8 * (made - 1) + generation_cost * 0.45
-            life_force_cost = 2.8 + 1.4 * (made - 1) + generation_cost * 0.35
+            energy_cost = 6.5 + 3.0 * (made - 1) + generation_cost * 0.72
+            nutrition_cost = 5.9 + 2.8 * (made - 1) + generation_cost * 0.62
+            health_cost = 3.0 + 1.7 * (made - 1) + generation_cost * 0.42
+            life_force_cost = 2.5 + 1.2 * (made - 1) + generation_cost * 0.34
+
+            energy_cost *= cost_multiplier
+            nutrition_cost *= cost_multiplier
+            health_cost *= cost_multiplier
+            life_force_cost *= cost_multiplier
 
             agent.energy = max(0.0, agent.energy - energy_cost)
             agent.nutrition = max(0.0, agent.nutrition - nutrition_cost)
@@ -845,17 +1012,17 @@ class World:
             agent.life_force = max(0.0, agent.life_force - life_force_cost)
             agent.reproduction_load = min(
                 100.0,
-                agent.reproduction_load + 14.0 + 5.0 * (made - 1),
+                agent.reproduction_load + 11.5 + 4.0 * (made - 1),
             )
             agent.births += made
-            agent.reproduction_boost = max(0.0, agent.reproduction_boost - made)
+            agent.reproduction_boost = max(0.0, agent.reproduction_boost - made * 0.7)
 
             if made == 1:
                 self._last_log = f"{agent.name} reproduced -> 1 child"
-            elif made == 2:
-                self._last_log = f"{agent.name} reproduced -> twins"
             else:
-                self._last_log = f"{agent.name} reproduced -> triplets"
+                self._last_log = f"{agent.name} reproduced -> twins"
+
+            agent.clamp_state()
 
         for child in births_this_tick:
             self.add_agent(child)
@@ -1047,10 +1214,13 @@ class World:
         self._last_log = f"Tick {self.tick_count}"
 
         if self.tick_count % 3 == 0:
-            self.sprinkle_food(count=4)
+            self.sprinkle_food(count=5)
 
         if self.tick_count % 5 == 0:
             self.sprinkle_chips(count=3)
+
+        self._apply_population_scaled_food_support()
+        self._apply_population_rescue()
 
         zone_lookup = self.zone_lookup()
 
@@ -1106,6 +1276,9 @@ class World:
         for agent in self.living_agents():
             self._attempt_help(agent)
 
+        self._apply_mid_high_population_restraint()
+        self._apply_low_population_recovery()
+        self._apply_low_population_rebound()
         self._attempt_reproduction()
         self._record_new_deaths(previous_dead_names)
         self._record_metrics()
