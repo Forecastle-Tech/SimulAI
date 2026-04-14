@@ -171,11 +171,7 @@ class World:
     def _apply_population_scaled_food_support(self) -> None:
         living_count = len(self.living_agents())
 
-        # Version I:
-        # restore some lower-mid support without reopening strong carry.
-        if 5 <= living_count <= 8 and self.tick_count % 4 == 0:
-            self.sprinkle_food(count=1)
-        elif 9 <= living_count <= 12 and self.tick_count % 5 == 0:
+        if 8 <= living_count <= 11 and self.tick_count % 4 == 0:
             self.sprinkle_food(count=1)
 
     def _apply_low_population_recovery(self) -> None:
@@ -197,25 +193,23 @@ class World:
         living = self.living_agents()
         living_count = len(living)
 
-        # Version I:
-        # tiny rebound only at critical population, lighter than H.
-        if living_count == 0 or living_count > 3:
+        if living_count == 0 or living_count > 2:
             return
 
-        if self.tick_count % 3 == 0:
-            extra_food = 2 if living_count == 1 else 1
+        extra_food = 2 if living_count == 1 else 1
+        if extra_food > 0 and self.tick_count % 2 == 0:
             self.sprinkle_food(count=extra_food)
 
-        if living_count == 1 and self.tick_count % 6 == 0:
+        if living_count == 1 and self.tick_count % 5 == 0:
             self.sprinkle_chips(count=1)
 
         for agent in living:
-            agent.energy = min(100.0, agent.energy + 0.22)
-            agent.nutrition = min(100.0, agent.nutrition + 0.22)
-            agent.life_force = min(100.0, agent.life_force + 0.12)
-            agent.health = min(100.0, agent.health + 0.08)
-            agent.reproduction_load = max(0.0, agent.reproduction_load - 0.18)
-            agent.risk_load = max(0.0, agent.risk_load - 0.10)
+            agent.energy = min(100.0, agent.energy + 0.35)
+            agent.nutrition = min(100.0, agent.nutrition + 0.35)
+            agent.life_force = min(100.0, agent.life_force + 0.20)
+            agent.health = min(100.0, agent.health + 0.14)
+            agent.reproduction_load = max(0.0, agent.reproduction_load - 0.35)
+            agent.risk_load = max(0.0, agent.risk_load - 0.18)
             agent.clamp_state()
 
         self._last_log = f"Low-pop rebound support: {living_count} survivors"
@@ -333,8 +327,8 @@ class World:
                 energy_gain += 3.0
                 life_force_gain += 0.4
             elif zone == "plains":
-                nutrition_gain += 2.0
-                energy_gain += 1.0
+                nutrition_gain += 3.0
+                energy_gain += 1.5
             elif zone == "drylands":
                 nutrition_gain -= 2.0
                 life_force_gain -= 0.2
